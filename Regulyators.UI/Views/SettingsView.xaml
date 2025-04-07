@@ -1,0 +1,419 @@
+﻿<!-- SettingsView.xaml -->
+<UserControl 
+    x:Class="Regulyators.UI.Views.SettingsView"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006" 
+    xmlns:d="http://schemas.microsoft.com/expression/blend/2008" 
+    xmlns:local="clr-namespace:Regulyators.UI.Views"
+    mc:Ignorable="d" 
+    d:DesignHeight="600" d:DesignWidth="800">
+
+    <Grid Margin="16">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+
+        <!-- Заголовок -->
+        <TextBlock 
+            Grid.Row="0"
+            Text="Настройки системы" 
+            FontSize="18" 
+            FontWeight="Bold" 
+            Margin="0,0,0,16"/>
+
+        <!-- Основное содержимое -->
+        <Grid Grid.Row="1">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="*" />
+            </Grid.ColumnDefinitions>
+
+            <!-- Левая панель - настройки связи -->
+            <Border 
+                Grid.Column="0" 
+                BorderBrush="#CCCCCC" 
+                BorderThickness="1" 
+                Margin="0,0,8,0"
+                Padding="16"
+                Background="#F5F5F5"
+                CornerRadius="4">
+                <StackPanel>
+                    <TextBlock 
+                        Text="Настройки связи" 
+                        FontSize="16" 
+                        FontWeight="SemiBold" 
+                        Margin="0,0,0,16"/>
+
+                    <!-- COM-порт -->
+                    <Grid Margin="0,8">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="150"/>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+
+                        <TextBlock 
+                            Grid.Column="0" 
+                            Text="COM-порт:"
+                            VerticalAlignment="Center"/>
+
+                        <ComboBox 
+                            Grid.Column="1" 
+                            ItemsSource="{Binding AvailablePorts}"
+                            SelectedItem="{Binding SelectedPortName}"
+                            VerticalAlignment="Center"
+                            Margin="0,0,8,0"/>
+
+                        <Button 
+                            Grid.Column="2" 
+                            Content="Обновить" 
+                            Command="{Binding RefreshPortsCommand}"
+                            VerticalAlignment="Center"/>
+                    </Grid>
+
+                    <!-- Скорость передачи -->
+                    <Grid Margin="0,8">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="150"/>
+                            <ColumnDefinition Width="*"/>
+                        </Grid.ColumnDefinitions>
+
+                        <TextBlock 
+                            Grid.Column="0" 
+                            Text="Скорость (бод):"
+                            VerticalAlignment="Center"/>
+
+                        <ComboBox 
+                            Grid.Column="1" 
+                            ItemsSource="{Binding BaudRates}"
+                            SelectedItem="{Binding SelectedBaudRate}"
+                            VerticalAlignment="Center"/>
+                    </Grid>
+
+                    <!-- Биты данных -->
+                    <Grid Margin="0,8">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="150"/>
+                            <ColumnDefinition Width="*"/>
+                        </Grid.ColumnDefinitions>
+
+                        <TextBlock 
+                            Grid.Column="0" 
+                            Text="Биты данных:"
+                            VerticalAlignment="Center"/>
+
+                        <TextBox 
+                            Grid.Column="1" 
+                            Text="{Binding ComPortSettings.DataBits, UpdateSourceTrigger=PropertyChanged}"
+                            VerticalAlignment="Center"/>
+                    </Grid>
+
+                    <!-- Стоповые биты -->
+                    <Grid Margin="0,8">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="150"/>
+                            <ColumnDefinition Width="*"/>
+                        </Grid.ColumnDefinitions>
+
+                        <TextBlock 
+                            Grid.Column="0" 
+                            Text="Стоповые биты:"
+                            VerticalAlignment="Center"/>
+
+                        <ComboBox 
+                            Grid.Column="1" 
+                            VerticalAlignment="Center"
+                            SelectedValue="{Binding ComPortSettings.StopBits}">
+                            <ComboBoxItem Content="1" Tag="One"/>
+                            <ComboBoxItem Content="1.5" Tag="OnePointFive"/>
+                            <ComboBoxItem Content="2" Tag="Two"/>
+                        </ComboBox>
+                    </Grid>
+
+                    <!-- Четность -->
+                    <Grid Margin="0,8">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="150"/>
+                            <ColumnDefinition Width="*"/>
+                        </Grid.ColumnDefinitions>
+
+                        <TextBlock 
+                            Grid.Column="0" 
+                            Text="Четность:"
+                            VerticalAlignment="Center"/>
+
+                        <ComboBox 
+                            Grid.Column="1" 
+                            VerticalAlignment="Center"
+                            SelectedValue="{Binding ComPortSettings.Parity}">
+                            <ComboBoxItem Content="Нет" Tag="None"/>
+                            <ComboBoxItem Content="Четные" Tag="Even"/>
+                            <ComboBoxItem Content="Нечетные" Tag="Odd"/>
+                            <ComboBoxItem Content="Маркер" Tag="Mark"/>
+                            <ComboBoxItem Content="Пробел" Tag="Space"/>
+                        </ComboBox>
+                    </Grid>
+
+                    <!-- Таймауты -->
+                    <Expander Header="Расширенные настройки" Margin="0,16,0,0">
+                        <StackPanel Margin="0,8,0,0">
+                            <!-- Таймаут чтения -->
+                            <Grid Margin="0,4">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="150"/>
+                                    <ColumnDefinition Width="*"/>
+                                </Grid.ColumnDefinitions>
+
+                                <TextBlock 
+                                    Grid.Column="0" 
+                                    Text="Таймаут чтения (мс):"
+                                    VerticalAlignment="Center"/>
+
+                                <TextBox 
+                                    Grid.Column="1" 
+                                    Text="{Binding ComPortSettings.ReadTimeout, UpdateSourceTrigger=PropertyChanged}"
+                                    VerticalAlignment="Center"/>
+                            </Grid>
+
+                            <!-- Таймаут записи -->
+                            <Grid Margin="0,4">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="150"/>
+                                    <ColumnDefinition Width="*"/>
+                                </Grid.ColumnDefinitions>
+
+                                <TextBlock 
+                                    Grid.Column="0" 
+                                    Text="Таймаут записи (мс):"
+                                    VerticalAlignment="Center"/>
+
+                                <TextBox 
+                                    Grid.Column="1" 
+                                    Text="{Binding ComPortSettings.WriteTimeout, UpdateSourceTrigger=PropertyChanged}"
+                                    VerticalAlignment="Center"/>
+                            </Grid>
+
+                            <!-- Интервал опроса -->
+                            <Grid Margin="0,4">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="150"/>
+                                    <ColumnDefinition Width="*"/>
+                                </Grid.ColumnDefinitions>
+
+                                <TextBlock 
+                                    Grid.Column="0" 
+                                    Text="Интервал опроса (мс):"
+                                    VerticalAlignment="Center"/>
+
+                                <TextBox 
+                                    Grid.Column="1" 
+                                    Text="{Binding ComPortSettings.PollingInterval, UpdateSourceTrigger=PropertyChanged}"
+                                    VerticalAlignment="Center"/>
+                            </Grid>
+
+                            <!-- Задержка ответа -->
+                            <Grid Margin="0,4">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="150"/>
+                                    <ColumnDefinition Width="*"/>
+                                </Grid.ColumnDefinitions>
+
+                                <TextBlock 
+                                    Grid.Column="0" 
+                                    Text="Задержка ответа (мс):"
+                                    VerticalAlignment="Center"/>
+
+                                <TextBox 
+                                    Grid.Column="1" 
+                                    Text="{Binding ComPortSettings.ResponseDelay, UpdateSourceTrigger=PropertyChanged}"
+                                    VerticalAlignment="Center"/>
+                            </Grid>
+                        </StackPanel>
+                    </Expander>
+                </StackPanel>
+            </Border>
+
+            <!-- Правая панель - настройки защит -->
+            <Border 
+                Grid.Column="1" 
+                BorderBrush="#CCCCCC" 
+                BorderThickness="1" 
+                Margin="8,0,0,0"
+                Padding="16"
+                Background="#F5F5F5"
+                CornerRadius="4">
+                <Grid>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="*"/>
+                        <RowDefinition Height="Auto"/>
+                    </Grid.RowDefinitions>
+
+                    <TextBlock 
+                        Grid.Row="0"
+                        Text="Настройки защит" 
+                        FontSize="16" 
+                        FontWeight="SemiBold" 
+                        Margin="0,0,0,16"/>
+
+                    <!-- Настройки порогов защит -->
+                    <StackPanel Grid.Row="1">
+                        <!-- Давление масла -->
+                        <Grid Margin="0,8">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+
+                            <TextBlock 
+                                Grid.Column="0" 
+                                Text="Минимальное давление масла (кг/см²):"
+                                VerticalAlignment="Center"/>
+
+                            <TextBox 
+                                Grid.Column="1" 
+                                Width="100"
+                                Text="{Binding ProtectionThresholds.OilPressureMinThreshold, StringFormat=N2, UpdateSourceTrigger=PropertyChanged}"
+                                VerticalAlignment="Center"/>
+                        </Grid>
+
+                        <!-- Разделитель -->
+                        <Separator Margin="0,4"/>
+
+                        <!-- Обороты двигателя -->
+                        <Grid Margin="0,8">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+
+                            <TextBlock 
+                                Grid.Column="0" 
+                                Text="Максимальные обороты двигателя (об/мин):"
+                                VerticalAlignment="Center"/>
+
+                            <TextBox 
+                                Grid.Column="1" 
+                                Width="100"
+                                Text="{Binding ProtectionThresholds.EngineSpeedMaxThreshold, StringFormat=N0, UpdateSourceTrigger=PropertyChanged}"
+                                VerticalAlignment="Center"/>
+                        </Grid>
+
+                        <!-- Разделитель -->
+                        <Separator Margin="0,4"/>
+
+                        <!-- Давление наддува -->
+                        <Grid Margin="0,8">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+
+                            <TextBlock 
+                                Grid.Column="0" 
+                                Text="Максимальное давление наддува (кг/см²):"
+                                VerticalAlignment="Center"/>
+
+                            <TextBox 
+                                Grid.Column="1" 
+                                Width="100"
+                                Text="{Binding ProtectionThresholds.BoostPressureMaxThreshold, StringFormat=N2, UpdateSourceTrigger=PropertyChanged}"
+                                VerticalAlignment="Center"/>
+                        </Grid>
+
+                        <!-- Разделитель -->
+                        <Separator Margin="0,4"/>
+
+                        <!-- Температура масла -->
+                        <Grid Margin="0,8">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+
+                            <TextBlock 
+                                Grid.Column="0" 
+                                Text="Максимальная температура масла (°C):"
+                                VerticalAlignment="Center"/>
+
+                            <TextBox 
+                                Grid.Column="1" 
+                                Width="100"
+                                Text="{Binding ProtectionThresholds.OilTemperatureMaxThreshold, StringFormat=N1, UpdateSourceTrigger=PropertyChanged}"
+                                VerticalAlignment="Center"/>
+                        </Grid>
+                    </StackPanel>
+
+                    <!-- Кнопки управления файлом настроек -->
+                    <StackPanel Grid.Row="2" Margin="0,16,0,0">
+                        <TextBlock 
+                            Text="Управление конфигурацией" 
+                            FontWeight="SemiBold" 
+                            Margin="0,0,0,8"/>
+
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+
+                            <TextBox 
+                                Grid.Column="0" 
+                                Text="{Binding ConfigFilePath, UpdateSourceTrigger=PropertyChanged}"
+                                IsReadOnly="True"
+                                VerticalAlignment="Center"/>
+
+                            <Button 
+                                Grid.Column="1" 
+                                Content="Загрузить" 
+                                Command="{Binding LoadSettingsCommand}"
+                                Margin="8,0,0,0"
+                                VerticalAlignment="Center"/>
+
+                            <Button 
+                                Grid.Column="2" 
+                                Content="Сохранить" 
+                                Command="{Binding SaveSettingsCommand}"
+                                Margin="8,0,0,0"
+                                VerticalAlignment="Center"/>
+                        </Grid>
+
+                        <Button 
+                            Content="Сбросить настройки по умолчанию" 
+                            Command="{Binding ResetToDefaultCommand}"
+                            Margin="0,8,0,0"
+                            HorizontalAlignment="Right"/>
+                    </StackPanel>
+                </Grid>
+            </Border>
+        </Grid>
+
+        <!-- Статусная строка и кнопки -->
+        <Grid Grid.Row="2" Margin="0,16,0,0">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*"/>
+                <ColumnDefinition Width="Auto"/>
+            </Grid.ColumnDefinitions>
+
+            <!-- Статусное сообщение -->
+            <TextBlock 
+                Grid.Column="0" 
+                Text="{Binding StatusMessage}"
+                VerticalAlignment="Center"/>
+
+            <!-- Кнопка применения настроек -->
+            <Button 
+                Grid.Column="1" 
+                Content="Применить настройки" 
+                Command="{Binding ApplySettingsCommand}"
+                IsEnabled="{Binding ApplyButtonEnabled}"
+                Padding="16,8"
+                Background="#2196F3"
+                Foreground="White"/>
+        </Grid>
+    </Grid>
+</UserControl>

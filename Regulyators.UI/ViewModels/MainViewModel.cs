@@ -4,6 +4,7 @@ using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Media;
 using System.Windows.Threading;
+using Regulyators.UI.Services;
 using Regulyators.UI.Views;
 
 namespace Regulyators.UI.ViewModels
@@ -14,6 +15,8 @@ namespace Regulyators.UI.ViewModels
     public class MainViewModel : ViewModelBase
     {
         private readonly DispatcherTimer _timer;
+        private readonly ComPortService _comPortService;
+        private readonly LoggingService _loggingService;
         private object _currentView;
         private MenuItem _selectedMenuItem;
         private string _connectionStatus;
@@ -92,6 +95,9 @@ namespace Regulyators.UI.ViewModels
         /// </summary>
         public MainViewModel()
         {
+            _comPortService = ComPortService.Instance;
+            _loggingService = LoggingService.Instance;
+
             // Инициализация таймера для обновления времени
             _timer = new DispatcherTimer
             {
@@ -111,6 +117,10 @@ namespace Regulyators.UI.ViewModels
             var controlViewModel = new EngineControlViewModel();
             var loggingViewModel = new LoggingViewModel();
 
+            // Новые модели представления для защит и настроек
+            var protectionViewModel = new ProtectionSystemViewModel();
+            var settingsViewModel = new SettingsViewModel();
+
             // Инициализация меню
             MenuItems = new ObservableCollection<MenuItem>
             {
@@ -126,17 +136,50 @@ namespace Regulyators.UI.ViewModels
                 },
                 new MenuItem
                 {
+                    Title = "Система защит",
+                    ViewModel = protectionViewModel
+                },
+                new MenuItem
+                {
                     Title = "Журнал событий",
                     ViewModel = loggingViewModel
+                },
+                new MenuItem
+                {
+                    Title = "Настройки системы",
+                    ViewModel = settingsViewModel
                 }
-
             };
 
             // Выбор первого пункта меню по умолчанию
             SelectedMenuItem = MenuItems[0];
 
+            // Подписка на события изменения состояния соединения
+            _comPortService.ConnectionStatusChanged += OnConnectionStatusChanged;
+
             // Пробуем подключиться к оборудованию
             Task.Run(SimulateConnection);
+        }
+
+        /// <summary>
+        /// Обработчик события изменения статуса подключения
+        /// </summary>
+        private void OnConnectionStatusChanged(object sender, bool isConnected)
+        {
+            Application.Current.Dispatcher.Invoke(() =>
+            {
+                ConnectionStatus = isConnected ? "Подключено" : "Нет связи";
+                ConnectionStatusColor = isConnected ? Brushes.Green : Brushes.Red;
+
+                if (isConnected)
+                {
+                    StatusMessage = "Подключение к оборудованию установлено";
+                }
+                else
+                {
+                    StatusMessage = "Соединение с оборудованием потеряно";
+                }
+            });
         }
 
         /// <summary>
