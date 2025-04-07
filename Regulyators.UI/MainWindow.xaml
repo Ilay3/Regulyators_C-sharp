@@ -1,0 +1,100 @@
+﻿<Window 
+    x:Class="Regulyators.UI.MainWindow"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+    xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+    xmlns:local="clr-namespace:Regulyators.UI"
+    xmlns:viewmodels="clr-namespace:Regulyators.UI.ViewModels"
+    mc:Ignorable="d"
+    Title="Система испытаний регуляторов ЭРЧМ30ТЗ" 
+    Height="720" 
+    Width="1100"
+    WindowStartupLocation="CenterScreen">
+
+    <Window.DataContext>
+        <viewmodels:MainViewModel />
+    </Window.DataContext>
+
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+            <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
+
+        <!-- Верхняя панель с заголовком и индикатором соединения -->
+        <Border 
+            Grid.Row="0" 
+            Background="#2196F3" 
+            Padding="16">
+            <DockPanel>
+                <TextBlock 
+                    Text="Система испытаний регуляторов ЭРЧМ30ТЗ" 
+                    FontSize="18" 
+                    FontWeight="Bold" 
+                    Foreground="White"
+                    DockPanel.Dock="Left" />
+
+                <StackPanel 
+                    Orientation="Horizontal" 
+                    HorizontalAlignment="Right">
+                    <TextBlock 
+                        Text="{Binding ConnectionStatus}" 
+                        Foreground="White" 
+                        VerticalAlignment="Center" 
+                        Margin="0,0,8,0" />
+                    <Ellipse 
+                        Width="16" 
+                        Height="16" 
+                        Fill="{Binding ConnectionStatusColor}" 
+                        VerticalAlignment="Center" />
+                </StackPanel>
+            </DockPanel>
+        </Border>
+
+        <!-- Основное содержимое -->
+        <Grid Grid.Row="1">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="200" />
+                <ColumnDefinition Width="*" />
+            </Grid.ColumnDefinitions>
+
+            <!-- Боковое меню -->
+            <Border Grid.Column="0" Background="#F5F5F5">
+                <ListBox 
+                    ItemsSource="{Binding MenuItems}" 
+                    SelectedItem="{Binding SelectedMenuItem}"
+                    Margin="8">
+                    <ListBox.ItemTemplate>
+                        <DataTemplate>
+                            <TextBlock Text="{Binding Title}" Padding="8,4" />
+                        </DataTemplate>
+                    </ListBox.ItemTemplate>
+                </ListBox>
+            </Border>
+
+            <!-- Область контента -->
+            <ContentControl 
+                Grid.Column="1" 
+                Content="{Binding CurrentView}" 
+                Margin="8" />
+        </Grid>
+
+        <!-- Строка состояния -->
+        <Border 
+            Grid.Row="2" 
+            Background="#E0E0E0" 
+            Padding="8">
+            <DockPanel>
+                <TextBlock 
+                    Text="{Binding StatusMessage}" 
+                    DockPanel.Dock="Left" />
+
+                <TextBlock 
+                    Text="{Binding CurrentDateTime, StringFormat='{}{0:dd.MM.yyyy HH:mm:ss}'}" 
+                    HorizontalAlignment="Right" />
+            </DockPanel>
+        </Border>
+    </Grid>
+</Window>

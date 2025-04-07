@@ -1,0 +1,323 @@
+﻿<UserControl 
+    x:Class="Regulyators.UI.Views.EngineParametersView"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006" 
+    xmlns:d="http://schemas.microsoft.com/expression/blend/2008" 
+    xmlns:local="clr-namespace:Regulyators.UI.Views"
+    mc:Ignorable="d" 
+    d:DesignHeight="600" d:DesignWidth="800">
+
+    <Grid Margin="16">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+        </Grid.RowDefinitions>
+
+        <!-- Заголовок -->
+        <TextBlock 
+            Grid.Row="0"
+            Text="Параметры двигателя" 
+            FontSize="18" 
+            FontWeight="Bold" 
+            Margin="0,0,0,16"/>
+
+        <!-- Основное содержимое -->
+        <Grid Grid.Row="1">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="*" />
+            </Grid.ColumnDefinitions>
+
+            <!-- Левая панель - параметры двигателя -->
+            <Border 
+                Grid.Column="0" 
+                BorderBrush="#CCCCCC" 
+                BorderThickness="1" 
+                Margin="0,0,8,0"
+                Padding="16"
+                Background="#F5F5F5"
+                CornerRadius="4">
+                <StackPanel>
+                    <TextBlock 
+                        Text="Текущие параметры" 
+                        FontSize="16" 
+                        FontWeight="SemiBold" 
+                        Margin="0,0,0,16"/>
+
+                    <!-- Обороты двигателя -->
+                    <Grid Margin="0,8">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+
+                        <TextBlock 
+                            Grid.Column="0" 
+                            Text="Обороты двигателя:"
+                            VerticalAlignment="Center"/>
+
+                        <TextBlock 
+                            Grid.Column="1" 
+                            Text="{Binding EngineParameters.EngineSpeed, StringFormat='{}{0:N0} об/мин'}"
+                            FontWeight="Bold"
+                            VerticalAlignment="Center"/>
+                    </Grid>
+
+                    <!-- Разделитель -->
+                    <Separator Margin="0,4"/>
+
+                    <!-- Обороты турбокомпрессора -->
+                    <Grid Margin="0,8">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+
+                        <TextBlock 
+                            Grid.Column="0" 
+                            Text="Обороты турбокомпрессора:"
+                            VerticalAlignment="Center"/>
+
+                        <TextBlock 
+                            Grid.Column="1" 
+                            Text="{Binding EngineParameters.TurboCompressorSpeed, StringFormat='{}{0:N0} об/мин'}"
+                            FontWeight="Bold"
+                            VerticalAlignment="Center"/>
+                    </Grid>
+
+                    <!-- Разделитель -->
+                    <Separator Margin="0,4"/>
+
+                    <!-- Давление масла -->
+                    <Grid Margin="0,8">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+
+                        <TextBlock 
+                            Grid.Column="0" 
+                            Text="Давление масла:"
+                            VerticalAlignment="Center"/>
+
+                        <TextBlock 
+                            Grid.Column="1" 
+                            Text="{Binding EngineParameters.OilPressure, StringFormat='{}{0:N2} кг/см²'}"
+                            FontWeight="Bold"
+                            VerticalAlignment="Center"
+                            Foreground="{Binding OilPressureColor}"/>
+                    </Grid>
+
+                    <!-- Разделитель -->
+                    <Separator Margin="0,4"/>
+
+                    <!-- Давление наддува -->
+                    <Grid Margin="0,8">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+
+                        <TextBlock 
+                            Grid.Column="0" 
+                            Text="Давление наддува:"
+                            VerticalAlignment="Center"/>
+
+                        <TextBlock 
+                            Grid.Column="1" 
+                            Text="{Binding EngineParameters.BoostPressure, StringFormat='{}{0:N2} кг/см²'}"
+                            FontWeight="Bold"
+                            VerticalAlignment="Center"
+                            Foreground="{Binding BoostPressureColor}"/>
+                    </Grid>
+
+                    <!-- Разделитель -->
+                    <Separator Margin="0,4"/>
+
+                    <!-- Температура масла -->
+                    <Grid Margin="0,8">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+
+                        <TextBlock 
+                            Grid.Column="0" 
+                            Text="Температура масла:"
+                            VerticalAlignment="Center"/>
+
+                        <TextBlock 
+                            Grid.Column="1" 
+                            Text="{Binding EngineParameters.OilTemperature, StringFormat='{}{0:N1} °C'}"
+                            FontWeight="Bold"
+                            VerticalAlignment="Center"
+                            Foreground="{Binding OilTemperatureColor}"/>
+                    </Grid>
+
+                    <!-- Разделитель -->
+                    <Separator Margin="0,4"/>
+
+                    <!-- Положение рейки -->
+                    <Grid Margin="0,8">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+
+                        <TextBlock 
+                            Grid.Column="0" 
+                            Text="Положение рейки:"
+                            VerticalAlignment="Center"/>
+
+                        <TextBlock 
+                            Grid.Column="1" 
+                            Text="{Binding EngineParameters.RackPosition, StringFormat='{}{0:D} (код)'}"
+                            FontWeight="Bold"
+                            VerticalAlignment="Center"/>
+                    </Grid>
+                </StackPanel>
+            </Border>
+
+            <!-- Правая панель - системы защиты и график -->
+            <Grid Grid.Column="1" Margin="8,0,0,0">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="*"/>
+                </Grid.RowDefinitions>
+
+                <!-- Системы защиты -->
+                <Border 
+                    Grid.Row="0"
+                    BorderBrush="#CCCCCC" 
+                    BorderThickness="1" 
+                    Padding="16"
+                    Background="#F5F5F5"
+                    CornerRadius="4"
+                    Margin="0,0,0,16">
+                    <StackPanel>
+                        <TextBlock 
+                            Text="Системы защиты" 
+                            FontSize="16" 
+                            FontWeight="SemiBold" 
+                            Margin="0,0,0,16"/>
+
+                        <!-- Защита по давлению масла -->
+                        <Grid Margin="0,4">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+
+                            <TextBlock 
+                                Grid.Column="0" 
+                                Text="Защита по давлению масла:"
+                                VerticalAlignment="Center"/>
+
+                            <Border 
+                                Grid.Column="1" 
+                                Background="{Binding OilPressureCriticalColor}" 
+                                Width="16" 
+                                Height="16" 
+                                CornerRadius="8"/>
+                        </Grid>
+
+                        <!-- Защита по оборотам двигателя -->
+                        <Grid Margin="0,4">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+
+                            <TextBlock 
+                                Grid.Column="0" 
+                                Text="Защита по оборотам двигателя:"
+                                VerticalAlignment="Center"/>
+
+                            <Border 
+                                Grid.Column="1" 
+                                Background="{Binding EngineSpeedCriticalColor}" 
+                                Width="16" 
+                                Height="16" 
+                                CornerRadius="8"/>
+                        </Grid>
+
+                        <!-- Ограничение по наддуву -->
+                        <Grid Margin="0,4">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+
+                            <TextBlock 
+                                Grid.Column="0" 
+                                Text="Ограничение по наддуву:"
+                                VerticalAlignment="Center"/>
+
+                            <Border 
+                                Grid.Column="1" 
+                                Background="{Binding BoostPressureCriticalColor}" 
+                                Width="16" 
+                                Height="16" 
+                                CornerRadius="8"/>
+                        </Grid>
+
+                        <!-- Защита по температуре масла -->
+                        <Grid Margin="0,4">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+
+                            <TextBlock 
+                                Grid.Column="0" 
+                                Text="Защита по температуре масла:"
+                                VerticalAlignment="Center"/>
+
+                            <Border 
+                                Grid.Column="1" 
+                                Background="{Binding OilTemperatureCriticalColor}" 
+                                Width="16" 
+                                Height="16" 
+                                CornerRadius="8"/>
+                        </Grid>
+                    </StackPanel>
+                </Border>
+
+                <!-- График -->
+                <Border 
+    Grid.Row="1"
+    BorderBrush="#CCCCCC" 
+    BorderThickness="1"
+    Background="#F5F5F5"
+    CornerRadius="4">
+                    <Grid Margin="16">
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="*"/>
+                            <RowDefinition Height="Auto"/>
+                        </Grid.RowDefinitions>
+
+                        <TextBlock 
+            Grid.Row="0"
+            Text="График параметров" 
+            FontSize="16" 
+            FontWeight="SemiBold"/>
+
+                        <!-- ScottPlot контрол -->
+                        <WpfPlot 
+            Grid.Row="1"
+            x:Name="ParametersPlot"
+            Margin="0,8"/>
+
+                        <!-- Настройки графика -->
+                        <StackPanel Grid.Row="2" Orientation="Horizontal" HorizontalAlignment="Right">
+                            <Button Content="Очистить" Command="{Binding ClearGraphCommand}" Margin="0,0,8,0"/>
+                            <Button Content="Экспорт" Command="{Binding ExportGraphCommand}"/>
+                        </StackPanel>
+                    </Grid>
+                </Border>
+            </Grid>
+        </Grid>
+    </Grid>
+</UserControl>
