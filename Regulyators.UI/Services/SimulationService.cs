@@ -5,6 +5,7 @@ using System.Threading.Tasks;
 using System.Windows;
 using Regulyators.UI.Models;
 using Regulyators.UI.Services;
+using static Regulyators.UI.Services.ComPortService;
 
 namespace Regulyators.UI.Services
 {

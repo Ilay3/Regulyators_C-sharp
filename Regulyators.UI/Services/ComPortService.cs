@@ -1,17 +1,17 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.IO.Ports;
+using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
-using System.Linq;
 using Regulyators.UI.Models;
 
 namespace Regulyators.UI.Services
 {
     /// <summary>
-    /// Сервис для асинхронной работы с COM-портом и протоколом ЭРЧМ30ТЗ
+    /// Расширенная версия сервиса COM-порта с поддержкой симуляции
     /// </summary>
-    public class ComPortService
+    public class ComPortService : IDisposable
     {
         private static ComPortService _instance;
         private SerialPort _serialPort;
@@ -24,6 +24,12 @@ namespace Regulyators.UI.Services
         private readonly Queue<TaskCompletionSource<bool>> _commandCompletionQueue;
         private int _maxRetryAttempts = 3;
         private int _reconnectDelay = 2000; // 2 секунды
+
+        // Поля для симуляции
+        private bool _isSimulationMode = false;
+        private readonly Random _random = new Random();
+        private readonly Timer _simulationWatchdog;
+        private bool _simulationConnected = false;
 
         /// <summary>
         /// Событие получения новых данных с порта
@@ -46,15 +52,14 @@ namespace Regulyators.UI.Services
         public event EventHandler<ProtectionStatus> ProtectionStatusUpdated;
 
         /// <summary>
+        /// Событие получения команды для симулятора
+        /// </summary>
+        public event EventHandler<ERCHM30TZCommand> CommandReceived;
+
+        /// <summary>
         /// Текущие настройки порта
         /// </summary>
         public ComPortSettings Settings { get; private set; }
-
-        // Событие получения команды для симулятора
-        public event EventHandler<ERCHM30TZCommand> CommandReceived;
-
-        // Флаг режима симуляции
-        private bool _isSimulationMode = false;
 
         /// <summary>
         /// Статус соединения
@@ -78,42 +83,14 @@ namespace Regulyators.UI.Services
         }
 
         /// <summary>
+        /// Активен ли режим симуляции
+        /// </summary>
+        public bool IsSimulationMode => _isSimulationMode;
+
+        /// <summary>
         /// Получение экземпляра сервиса (Singleton)
         /// </summary>
         public static ComPortService Instance => _instance ??= new ComPortService();
-
-        /// <summary>
-        /// Включение или выключение режима симуляции
-        /// </summary>
-        public void SetSimulationMode(bool enabled)
-        {
-            _isSimulationMode = enabled;
-            _loggingService.LogInfo($"Режим симуляции {(enabled ? "включен" : "выключен")}");
-        }
-
-        /// <summary>
-        /// Симуляция состояния подключения
-        /// </summary>
-        public void SimulateConnection(bool isConnected)
-        {
-            IsConnected = isConnected;
-        }
-
-        /// <summary>
-        /// Симуляция получения данных от контроллера
-        /// </summary>
-        public void SimulateDataReceived(EngineParameters parameters)
-        {
-            DataReceived?.Invoke(this, parameters);
-        }
-
-        /// <summary>
-        /// Симуляция обновления статуса защит
-        /// </summary>
-        public void SimulateProtectionStatusUpdated(ProtectionStatus status)
-        {
-            ProtectionStatusUpdated?.Invoke(this, status);
-        }
 
         private ComPortService()
         {
@@ -122,6 +99,96 @@ namespace Regulyators.UI.Services
             _loggingService = LoggingService.Instance;
             Settings = new ComPortSettings();
             _isConnected = false;
+
+            // Инициализация таймера-сторожа для симуляции
+            _simulationWatchdog = new Timer(SimulationWatchdogCallback, null, Timeout.Infinite, Timeout.Infinite);
+        }
+
+        /// <summary>
+        /// Включение или выключение режима симуляции
+        /// </summary>
+        public void SetSimulationMode(bool enabled)
+        {
+            // Если режим уже установлен, ничего не делаем
+            if (_isSimulationMode == enabled)
+                return;
+
+            // Отключаемся от реального порта, если были подключены
+            if (_isConnected && !_simulationConnected)
+            {
+                Disconnect();
+            }
+
+            _isSimulationMode = enabled;
+            _loggingService.LogInfo($"Режим симуляции {(enabled ? "включен" : "выключен")}");
+
+            // Если включаем симуляцию, запускаем сторожевой таймер
+            if (enabled)
+            {
+                _simulationWatchdog.Change(0, 5000); // Проверка каждые 5 секунд
+            }
+            else
+            {
+                _simulationWatchdog.Change(Timeout.Infinite, Timeout.Infinite);
+            }
+        }
+
+        /// <summary>
+        /// Симуляция состояния подключения
+        /// </summary>
+        public void SimulateConnection(bool isConnected)
+        {
+            if (_isSimulationMode)
+            {
+                // Запоминаем, что это симулированное подключение
+                _simulationConnected = isConnected;
+                IsConnected = isConnected;
+
+                if (isConnected)
+                {
+                    _loggingService.LogInfo("Симуляция: соединение с оборудованием установлено");
+                }
+                else
+                {
+                    _loggingService.LogInfo("Симуляция: соединение с оборудованием потеряно");
+                }
+            }
+        }
+
+        /// <summary>
+        /// Симуляция получения данных от контроллера
+        /// </summary>
+        public void SimulateDataReceived(EngineParameters parameters)
+        {
+            if (_isSimulationMode && _isConnected)
+            {
+                try
+                {
+                    DataReceived?.Invoke(this, parameters);
+                }
+                catch (Exception ex)
+                {
+                    _loggingService.LogError($"Ошибка при обработке симулированных данных: {ex.Message}", ex.StackTrace);
+                }
+            }
+        }
+
+        /// <summary>
+        /// Симуляция обновления статуса защиты
+        /// </summary>
+        public void SimulateProtectionStatusUpdated(ProtectionStatus status)
+        {
+            if (_isSimulationMode && _isConnected)
+            {
+                try
+                {
+                    ProtectionStatusUpdated?.Invoke(this, status);
+                }
+                catch (Exception ex)
+                {
+                    _loggingService.LogError($"Ошибка при обработке симулированного статуса защит: {ex.Message}", ex.StackTrace);
+                }
+            }
         }
 
         /// <summary>
@@ -129,7 +196,15 @@ namespace Regulyators.UI.Services
         /// </summary>
         public string[] GetAvailablePorts()
         {
-            return SerialPort.GetPortNames();
+            try
+            {
+                return SerialPort.GetPortNames();
+            }
+            catch (Exception ex)
+            {
+                _loggingService.LogError($"Ошибка при получении списка COM-портов: {ex.Message}", ex.StackTrace);
+                return new string[0];
+            }
         }
 
         /// <summary>
@@ -137,7 +212,7 @@ namespace Regulyators.UI.Services
         /// </summary>
         public void UpdateSettings(ComPortSettings settings)
         {
-            if (IsConnected)
+            if (IsConnected && !_isSimulationMode)
             {
                 Disconnect();
             }
@@ -157,11 +232,10 @@ namespace Regulyators.UI.Services
                 $"Макс. попыток: {maxRetryAttempts}, Задержка: {reconnectDelay} мс");
         }
 
-
         /// <summary>
         /// Подключение к COM-порту
         /// </summary>
-        public new bool Connect()
+        public bool Connect()
         {
             try
             {
@@ -173,13 +247,14 @@ namespace Regulyators.UI.Services
                 if (_isSimulationMode)
                 {
                     _loggingService.LogInfo("Соединение установлено (режим симуляции)");
+                    _simulationConnected = true;
                     IsConnected = true;
                     return true;
                 }
 
                 _loggingService.LogInfo("Попытка подключения к COM-порту", $"Порт: {Settings.PortName}, Скорость: {Settings.BaudRate}");
 
-                _serialPort = new System.IO.Ports.SerialPort
+                _serialPort = new SerialPort
                 {
                     PortName = Settings.PortName,
                     BaudRate = Settings.BaudRate,
@@ -199,7 +274,7 @@ namespace Regulyators.UI.Services
                 IsConnected = true;
 
                 // Запускаем задачи обработки данных
-                _cancellationTokenSource = new System.Threading.CancellationTokenSource();
+                _cancellationTokenSource = new CancellationTokenSource();
                 _processingTask = Task.Run(() => ProcessCommandQueue(_cancellationTokenSource.Token));
 
                 // Запускаем мониторинг порта
@@ -231,11 +306,10 @@ namespace Regulyators.UI.Services
             }
         }
 
-
         /// <summary>
         /// Отключение от COM-порта
         /// </summary>
-        public new void Disconnect()
+        public void Disconnect()
         {
             try
             {
@@ -243,6 +317,7 @@ namespace Regulyators.UI.Services
 
                 if (_isSimulationMode)
                 {
+                    _simulationConnected = false;
                     IsConnected = false;
                     _loggingService.LogInfo("Соединение разорвано (режим симуляции)");
                     return;
@@ -300,16 +375,16 @@ namespace Regulyators.UI.Services
             }
         }
 
-
         /// <summary>
         /// Отправка команды в контроллер
         /// </summary>
-        public Task<bool> SendCommandAsync(ERCHM30TZCommand command)
+        public async Task<bool> SendCommandAsync(ERCHM30TZCommand command)
         {
             var tcs = new TaskCompletionSource<bool>();
 
             try
             {
+                // Логируем команду
                 LogCommand(command);
 
                 if (_isSimulationMode)
@@ -318,11 +393,22 @@ namespace Regulyators.UI.Services
                     CommandReceived?.Invoke(this, command);
 
                     // Симулируем успешное выполнение с небольшой задержкой
-                    Task.Delay(100).ContinueWith(_ => tcs.TrySetResult(true));
+                    await Task.Delay(100);
+
+                    // Иногда симулируем случайные ошибки
+                    bool success = _random.NextDouble() > 0.05; // 5% шанс ошибки
+
+                    // Вызываем успешное завершение задачи
+                    tcs.TrySetResult(success);
+
+                    if (!success)
+                    {
+                        _loggingService.LogWarning("Симуляция: ошибка выполнения команды", $"Команда: {command.CommandType}");
+                    }
                 }
                 else
                 {
-                    // Добавляем в очередь
+                    // В обычном режиме добавляем в очередь
                     lock (_lockObj)
                     {
                         _commandQueue.Enqueue(command);
@@ -330,7 +416,7 @@ namespace Regulyators.UI.Services
                     }
                 }
 
-                return tcs.Task;
+                return await tcs.Task;
             }
             catch (Exception ex)
             {
@@ -338,9 +424,8 @@ namespace Regulyators.UI.Services
                 _loggingService.LogError(errorMessage, ex.StackTrace);
                 ErrorOccurred?.Invoke(this, errorMessage);
                 tcs.TrySetResult(false);
-                return tcs.Task;
+                return false;
             }
-
         }
 
         /// <summary>
@@ -404,6 +489,150 @@ namespace Regulyators.UI.Services
 
             _loggingService.LogInfo($"Отправка команды: {command.CommandType}", details);
         }
+
+        /// <summary>
+        /// Обработка очереди команд
+        /// </summary>
+        private async Task ProcessCommandQueue(CancellationToken cancellationToken)
+        {
+            _loggingService.LogInfo("Запуск обработки очереди команд");
+
+            while (!cancellationToken.IsCancellationRequested)
+            {
+                ERCHM30TZCommand command = null;
+                TaskCompletionSource<bool> commandCompletion = null;
+
+                // Извлекаем команду из очереди
+                lock (_lockObj)
+                {
+                    if (_commandQueue.Count > 0 && _commandCompletionQueue.Count > 0)
+                    {
+                        command = _commandQueue.Dequeue();
+                        commandCompletion = _commandCompletionQueue.Dequeue();
+                    }
+                }
+
+                if (command != null && commandCompletion != null)
+                {
+                    _loggingService.LogInfo($"Обработка команды из очереди: {command.CommandType}");
+
+                    // Формируем пакет данных для отправки
+                    byte[] packet = ComposePacket(command);
+
+                    bool success = false;
+                    int retryCount = 0;
+
+                    // Пробуем отправить команду с возможностью повтора при ошибке
+                    while (!success && retryCount < 3 && !cancellationToken.IsCancellationRequested)
+                    {
+                        if (retryCount > 0)
+                        {
+                            _loggingService.LogInfo($"Повторная отправка команды: {command.CommandType}, попытка {retryCount + 1}/3");
+                            await Task.Delay(100, cancellationToken); // Небольшая задержка перед повтором
+                        }
+
+                        if (SendData(packet))
+                        {
+                            _loggingService.LogInfo("Команда отправлена успешно", $"Тип: {command.CommandType}");
+
+                            // Ждем ответа
+                            success = await ReadResponseAsync(command);
+                            if (success)
+                            {
+                                _loggingService.LogInfo("Команда выполнена успешно", $"Тип: {command.CommandType}");
+                                commandCompletion.TrySetResult(true);
+                            }
+                            else
+                            {
+                                _loggingService.LogWarning("Ошибка выполнения команды", $"Тип: {command.CommandType}");
+                            }
+                        }
+
+                        retryCount++;
+                    }
+
+                    // Если все попытки не удались, сообщаем об ошибке
+                    if (!success)
+                    {
+                        _loggingService.LogError($"Не удалось выполнить команду после {retryCount} попыток", $"Тип: {command.CommandType}");
+                        commandCompletion.TrySetResult(false);
+                    }
+                }
+                else
+                {
+                    // Если очередь пуста, делаем небольшую паузу
+                    await Task.Delay(100, cancellationToken);
+                }
+            }
+
+            _loggingService.LogInfo("Завершение обработки очереди команд");
+        }
+
+        /// <summary>
+        /// Сторожевой таймер для мониторинга симуляции
+        /// </summary>
+        private void SimulationWatchdogCallback(object state)
+        {
+            if (_isSimulationMode && _simulationConnected)
+            {
+                // Иногда (с вероятностью 1%) симулируем случайные потери соединения
+                if (_random.NextDouble() < 0.01)
+                {
+                    // В режиме симуляции иногда случайно "теряем" соединение
+                    _loggingService.LogWarning("Симуляция: случайная потеря соединения");
+
+                    // Уведомляем о потере соединения
+                    _simulationConnected = false;
+                    IsConnected = false;
+
+                    // Автоматическое восстановление через некоторое время
+                    Task.Delay(3000).ContinueWith(_ =>
+                    {
+                        if (_isSimulationMode)
+                        {
+                            _loggingService.LogInfo("Симуляция: автоматическое восстановление соединения");
+                            _simulationConnected = true;
+                            IsConnected = true;
+                        }
+                    });
+                }
+            }
+        }
+
+        /// <summary>
+        /// Запуск мониторинга параметров двигателя
+        /// </summary>
+        private void StartMonitoring()
+        {
+            _loggingService.LogInfo("Запуск мониторинга параметров двигателя", $"Интервал: {Settings.PollingInterval} мс");
+
+            // Запускаем периодический опрос параметров
+            Task.Run(async () =>
+            {
+                while (IsConnected && !_isSimulationMode)
+                {
+                    // Отправляем команду запроса параметров
+                    SendCommand(new ERCHM30TZCommand
+                    {
+                        CommandType = CommandType.GetParameters
+                    });
+
+                    // Периодически запрашиваем статус защит
+                    if (DateTime.Now.Second % 5 == 0) // Каждые 5 секунд
+                    {
+                        SendCommand(new ERCHM30TZCommand
+                        {
+                            CommandType = CommandType.GetProtectionStatus
+                        });
+                    }
+
+                    // Пауза между опросами
+                    await Task.Delay(Settings.PollingInterval);
+                }
+            });
+        }
+
+        #region Методы работы с реальным COM-портом
 
         /// <summary>
         /// Отправка данных в COM-порт
@@ -575,117 +804,6 @@ namespace Regulyators.UI.Services
                 ErrorOccurred?.Invoke(this, errorMessage);
                 return false;
             }
-        }
-
-        /// <summary>
-        /// Обработка очереди команд
-        /// </summary>
-        private async Task ProcessCommandQueue(CancellationToken cancellationToken)
-        {
-            _loggingService.LogInfo("Запуск обработки очереди команд");
-
-            while (!cancellationToken.IsCancellationRequested)
-            {
-                ERCHM30TZCommand command = null;
-                TaskCompletionSource<bool> commandCompletion = null;
-
-                // Извлекаем команду из очереди
-                lock (_lockObj)
-                {
-                    if (_commandQueue.Count > 0 && _commandCompletionQueue.Count > 0)
-                    {
-                        command = _commandQueue.Dequeue();
-                        commandCompletion = _commandCompletionQueue.Dequeue();
-                    }
-                }
-
-                if (command != null && commandCompletion != null)
-                {
-                    _loggingService.LogInfo($"Обработка команды из очереди: {command.CommandType}");
-
-                    // Формируем пакет данных для отправки
-                    byte[] packet = ComposePacket(command);
-
-                    bool success = false;
-                    int retryCount = 0;
-
-                    // Пробуем отправить команду с возможностью повтора при ошибке
-                    while (!success && retryCount < 3 && !cancellationToken.IsCancellationRequested)
-                    {
-                        if (retryCount > 0)
-                        {
-                            _loggingService.LogInfo($"Повторная отправка команды: {command.CommandType}, попытка {retryCount + 1}/3");
-                            await Task.Delay(100, cancellationToken); // Небольшая задержка перед повтором
-                        }
-
-                        if (SendData(packet))
-                        {
-                            _loggingService.LogInfo("Команда отправлена успешно", $"Тип: {command.CommandType}");
-
-                            // Ждем ответа
-                            success = await ReadResponseAsync(command);
-                            if (success)
-                            {
-                                _loggingService.LogInfo("Команда выполнена успешно", $"Тип: {command.CommandType}");
-                                commandCompletion.TrySetResult(true);
-                            }
-                            else
-                            {
-                                _loggingService.LogWarning("Ошибка выполнения команды", $"Тип: {command.CommandType}");
-                            }
-                        }
-
-                        retryCount++;
-                    }
-
-                    // Если все попытки не удались, сообщаем об ошибке
-                    if (!success)
-                    {
-                        _loggingService.LogError($"Не удалось выполнить команду после {retryCount} попыток", $"Тип: {command.CommandType}");
-                        commandCompletion.TrySetResult(false);
-                    }
-                }
-                else
-                {
-                    // Если очередь пуста, делаем небольшую паузу
-                    await Task.Delay(100, cancellationToken);
-                }
-            }
-
-            _loggingService.LogInfo("Завершение обработки очереди команд");
-        }
-
-        /// <summary>
-        /// Запуск мониторинга параметров двигателя
-        /// </summary>
-        private void StartMonitoring()
-        {
-            _loggingService.LogInfo("Запуск мониторинга параметров двигателя", $"Интервал: {Settings.PollingInterval} мс");
-
-            // Запускаем периодический опрос параметров
-            Task.Run(async () =>
-            {
-                while (IsConnected)
-                {
-                    // Отправляем команду запроса параметров
-                    SendCommand(new ERCHM30TZCommand
-                    {
-                        CommandType = CommandType.GetParameters
-                    });
-
-                    // Периодически запрашиваем статус защит
-                    if (DateTime.Now.Second % 5 == 0) // Каждые 5 секунд
-                    {
-                        SendCommand(new ERCHM30TZCommand
-                        {
-                            CommandType = CommandType.GetProtectionStatus
-                        });
-                    }
-
-                    // Пауза между опросами
-                    await Task.Delay(Settings.PollingInterval);
-                }
-            });
         }
 
         /// <summary>
@@ -1072,38 +1190,57 @@ namespace Regulyators.UI.Services
                 return null;
             }
         }
-    }
 
-
-
-    /// <summary>
-    /// Статус защит системы
-    /// </summary>
-    public class ProtectionStatus
-    {
-        /// <summary>
-        /// Активна ли защита по давлению масла
-        /// </summary>
-        public bool IsOilPressureActive { get; set; }
+        #endregion
 
         /// <summary>
-        /// Активна ли защита по оборотам двигателя
+        /// Очистка ресурсов
         /// </summary>
-        public bool IsEngineSpeedActive { get; set; }
+        public void Dispose()
+        {
+            // Отключаем сторожевой таймер
+            _simulationWatchdog?.Dispose();
+
+            // Отключаемся от COM-порта
+            if (IsConnected)
+            {
+                Disconnect();
+            }
+
+            // Очищаем ресурсы
+            _serialPort?.Dispose();
+            _cancellationTokenSource?.Dispose();
+        }
 
         /// <summary>
-        /// Активна ли защита по давлению наддува
+        /// Статус защит системы
         /// </summary>
-        public bool IsBoostPressureActive { get; set; }
+        public class ProtectionStatus
+        {
+            /// <summary>
+            /// Активна ли защита по давлению масла
+            /// </summary>
+            public bool IsOilPressureActive { get; set; }
 
-        /// <summary>
-        /// Активна ли защита по температуре масла
-        /// </summary>
-        public bool IsOilTemperatureActive { get; set; }
+            /// <summary>
+            /// Активна ли защита по оборотам двигателя
+            /// </summary>
+            public bool IsEngineSpeedActive { get; set; }
 
-        /// <summary>
-        /// Включены ли все защиты
-        /// </summary>
-        public bool AllProtectionsEnabled { get; set; }
+            /// <summary>
+            /// Активна ли защита по давлению наддува
+            /// </summary>
+            public bool IsBoostPressureActive { get; set; }
+
+            /// <summary>
+            /// Активна ли защита по температуре масла
+            /// </summary>
+            public bool IsOilTemperatureActive { get; set; }
+
+            /// <summary>
+            /// Включены ли все защиты
+            /// </summary>
+            public bool AllProtectionsEnabled { get; set; }
+        }
     }
 }

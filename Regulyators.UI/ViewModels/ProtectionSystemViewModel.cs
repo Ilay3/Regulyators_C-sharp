@@ -7,6 +7,7 @@ using System.Windows.Media;
 using Regulyators.UI.Common;
 using Regulyators.UI.Models;
 using Regulyators.UI.Services;
+using static Regulyators.UI.Services.ComPortService;
 
 namespace Regulyators.UI.ViewModels
 {
