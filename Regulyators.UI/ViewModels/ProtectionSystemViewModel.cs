@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Windows;
 using System.Windows.Input;
@@ -357,6 +358,11 @@ namespace Regulyators.UI.ViewModels
         /// </summary>
         public ICommand RefreshCommand { get; }
 
+        /// <summary>
+        /// Команда экспорта журнала событий
+        /// </summary>
+        public ICommand ExportEventsCommand { get; }
+
         #endregion
 
         /// <summary>
@@ -393,15 +399,17 @@ namespace Regulyators.UI.ViewModels
             IsConnected = _comPortService.IsConnected;
 
             // Инициализация команд
-            ResetProtectionCommand = new RelayCommand(ResetProtection, () => CanResetProtection);
-            ToggleAllProtectionsCommand = new RelayCommand(ToggleAllProtections);
+            ResetProtectionCommand = new RelayCommand(ResetProtection, () => CanResetProtection && IsConnected);
+            ToggleAllProtectionsCommand = new RelayCommand(ToggleAllProtections, () => IsConnected);
             ClearEventsCommand = new RelayCommand(ClearEvents);
-            RefreshCommand = new RelayCommand(RefreshValues);
+            RefreshCommand = new RelayCommand(RefreshValues, () => IsConnected);
+            ExportEventsCommand = new RelayCommand(ExportEvents);
 
             // Подписка на события COM-порта
             _comPortService.DataReceived += OnDataReceived;
             _comPortService.ConnectionStatusChanged += OnConnectionStatusChanged;
             _comPortService.ErrorOccurred += OnErrorOccurred;
+            _comPortService.ProtectionStatusUpdated += OnProtectionStatusUpdated;
 
             // Подписка на события изменения настроек
             _settingsService.SettingsChanged += OnSettingsChanged;
@@ -413,6 +421,77 @@ namespace Regulyators.UI.ViewModels
             if (IsConnected)
             {
                 RefreshValues();
+            }
+        }
+
+        /// <summary>
+        /// Экспорт журнала событий
+        /// </summary>
+        private void ExportEvents()
+        {
+            try
+            {
+                var dialog = new Microsoft.Win32.SaveFileDialog
+                {
+                    DefaultExt = ".csv",
+                    Filter = "CSV Files (*.csv)|*.csv|All Files (*.*)|*.*",
+                    Title = "Экспорт журнала событий защиты"
+                };
+
+                if (dialog.ShowDialog() == true)
+                {
+                    string filePath = dialog.FileName;
+
+                    // Используем сервис экспорта
+                    var exportService = ExportService.Instance;
+                    var result = exportService.ExportProtectionEventsToCSVAsync(
+                        new List<ProtectionEvent>(_protectionEvents), filePath).Result;
+
+                    if (result)
+                    {
+                        StatusMessage = $"Журнал событий защиты экспортирован в {filePath}";
+                        _loggingService.LogInfo("Журнал событий защиты экспортирован", filePath);
+                    }
+                    else
+                    {
+                        StatusMessage = "Ошибка при экспорте журнала событий";
+                        _loggingService.LogError("Ошибка при экспорте журнала событий");
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                StatusMessage = "Ошибка при экспорте журнала событий";
+                _loggingService.LogError("Ошибка при экспорте журнала событий", ex.Message);
+            }
+        }
+
+        /// <summary>
+        /// Обработчик события обновления статуса защит
+        /// </summary>
+        private void OnProtectionStatusUpdated(object sender, ProtectionStatus status)
+        {
+            try
+            {
+                Application.Current.Dispatcher.Invoke(() =>
+                {
+                    // Обновляем статусы защит
+                    IsOilPressureProtectionActive = status.IsOilPressureActive;
+                    IsEngineSpeedProtectionActive = status.IsEngineSpeedActive;
+                    IsBoostPressureProtectionActive = status.IsBoostPressureActive;
+                    IsOilTemperatureProtectionActive = status.IsOilTemperatureActive;
+
+                    // Обновляем статус включения защит
+                    AllProtectionsEnabled = status.AllProtectionsEnabled;
+
+                    LastUpdateTime = DateTime.Now;
+
+                    StatusMessage = "Получен статус защит";
+                });
+            }
+            catch (Exception ex)
+            {
+                _loggingService.LogError("Ошибка обработки статуса защит", ex.Message);
             }
         }
 
@@ -481,17 +560,24 @@ namespace Regulyators.UI.ViewModels
         /// </summary>
         private void OnDataReceived(object sender, EngineParameters parameters)
         {
-            // Обновляем значения параметров
-            Application.Current.Dispatcher.Invoke(() =>
+            try
             {
-                OilPressureCurrent = parameters.OilPressure;
-                EngineSpeedCurrent = parameters.EngineSpeed;
-                BoostPressureCurrent = parameters.BoostPressure;
-                OilTemperatureCurrent = parameters.OilTemperature;
+                // Обновляем значения параметров
+                Application.Current.Dispatcher.Invoke(() =>
+                {
+                    OilPressureCurrent = parameters.OilPressure;
+                    EngineSpeedCurrent = parameters.EngineSpeed;
+                    BoostPressureCurrent = parameters.BoostPressure;
+                    OilTemperatureCurrent = parameters.OilTemperature;
 
-                LastUpdateTime = parameters.Timestamp;
-                StatusMessage = "Данные обновлены";
-            });
+                    LastUpdateTime = parameters.Timestamp;
+                    StatusMessage = "Данные обновлены";
+                });
+            }
+            catch (Exception ex)
+            {
+                _loggingService.LogError("Ошибка обработки данных", ex.Message);
+            }
         }
 
         /// <summary>
@@ -499,17 +585,24 @@ namespace Regulyators.UI.ViewModels
         /// </summary>
         private void OnConnectionStatusChanged(object sender, bool isConnected)
         {
-            Application.Current.Dispatcher.Invoke(() =>
+            try
             {
-                IsConnected = isConnected;
-                StatusMessage = isConnected ? "Подключено к оборудованию" : "Нет подключения";
-
-                if (isConnected)
+                Application.Current.Dispatcher.Invoke(() =>
                 {
-                    // Запрашиваем текущие параметры
-                    RefreshValues();
-                }
-            });
+                    IsConnected = isConnected;
+                    StatusMessage = isConnected ? "Подключено к оборудованию" : "Нет подключения";
+
+                    if (isConnected)
+                    {
+                        // Запрашиваем текущие параметры
+                        RefreshValues();
+                    }
+                });
+            }
+            catch (Exception ex)
+            {
+                _loggingService.LogError("Ошибка обработки изменения статуса подключения", ex.Message);
+            }
         }
 
         /// <summary>
@@ -517,10 +610,17 @@ namespace Regulyators.UI.ViewModels
         /// </summary>
         private void OnErrorOccurred(object sender, string errorMessage)
         {
-            Application.Current.Dispatcher.Invoke(() =>
+            try
             {
-                StatusMessage = $"Ошибка: {errorMessage}";
-            });
+                Application.Current.Dispatcher.Invoke(() =>
+                {
+                    StatusMessage = $"Ошибка: {errorMessage}";
+                });
+            }
+            catch (Exception ex)
+            {
+                _loggingService.LogError("Ошибка обработки события ошибки COM-порта", ex.Message);
+            }
         }
 
         /// <summary>
@@ -530,44 +630,61 @@ namespace Regulyators.UI.ViewModels
         {
             if (e.SettingsType == SettingsType.Protection || e.SettingsType == SettingsType.All)
             {
-                Application.Current.Dispatcher.Invoke(() =>
+                try
                 {
-                    // Обновляем пороги защит
-                    Thresholds = _settingsService.ProtectionThresholds;
+                    Application.Current.Dispatcher.Invoke(() =>
+                    {
+                        // Обновляем пороги защит
+                        Thresholds = _settingsService.ProtectionThresholds;
 
-                    // Проверяем все защиты с новыми порогами
-                    CheckOilPressureProtection();
-                    CheckEngineSpeedProtection();
-                    CheckBoostPressureProtection();
-                    CheckOilTemperatureProtection();
+                        // Проверяем все защиты с новыми порогами
+                        CheckOilPressureProtection();
+                        CheckEngineSpeedProtection();
+                        CheckBoostPressureProtection();
+                        CheckOilTemperatureProtection();
 
-                    StatusMessage = "Пороги защит обновлены";
-                });
+                        StatusMessage = "Пороги защит обновлены";
+                    });
+                }
+                catch (Exception ex)
+                {
+                    _loggingService.LogError("Ошибка обработки изменения настроек", ex.Message);
+                }
             }
         }
 
         /// <summary>
         /// Сброс защит
         /// </summary>
-        private void ResetProtection()
+        private async void ResetProtection()
         {
             // Отправляем команду сброса защит через COM-порт
             if (IsConnected)
             {
-                _comPortService.SendCommand(new ERCHM30TZCommand
+                StatusMessage = "Выполняется сброс защит...";
+
+                bool result = await _comPortService.SendCommandAsync(new ERCHM30TZCommand
                 {
                     CommandType = CommandType.ResetProtection
                 });
 
-                // Сбрасываем состояние защит в UI
-                IsOilPressureProtectionActive = false;
-                IsEngineSpeedProtectionActive = false;
-                IsBoostPressureProtectionActive = false;
-                IsOilTemperatureProtectionActive = false;
+                if (result)
+                {
+                    // Сбрасываем состояние защит в UI
+                    IsOilPressureProtectionActive = false;
+                    IsEngineSpeedProtectionActive = false;
+                    IsBoostPressureProtectionActive = false;
+                    IsOilTemperatureProtectionActive = false;
 
-                LogProtectionEvent("Система защит", "Сброс защит", "Сброс всех активных защит");
-                _loggingService.LogInfo("Выполнен сброс защит");
-                StatusMessage = "Защиты сброшены";
+                    LogProtectionEvent("Система защит", "Сброс защит", "Сброс всех активных защит");
+                    _loggingService.LogInfo("Выполнен сброс защит");
+                    StatusMessage = "Защиты сброшены";
+                }
+                else
+                {
+                    _loggingService.LogError("Ошибка при сбросе защит");
+                    StatusMessage = "Ошибка при сбросе защит";
+                }
             }
             else
             {
@@ -579,40 +696,48 @@ namespace Regulyators.UI.ViewModels
         /// <summary>
         /// Включение/выключение всех защит
         /// </summary>
-        private void ToggleAllProtections()
+        private async void ToggleAllProtections()
         {
-            AllProtectionsEnabled = !AllProtectionsEnabled;
+            bool newState = !AllProtectionsEnabled;
 
-            // Отправляем команду включения/выключения защит через COM-порт
+            // Отправляем команду включения/выключения защит
             if (IsConnected)
             {
-                // Здесь должна быть реализация команды для включения/выключения защит
-                // в соответствии с протоколом ЭРЧМ30ТЗ
-            }
+                StatusMessage = $"Выполняется {(newState ? "включение" : "отключение")} защит...";
 
-            if (!AllProtectionsEnabled)
-            {
-                // Сбрасываем все активные защиты при отключении
-                IsOilPressureProtectionActive = false;
-                IsEngineSpeedProtectionActive = false;
-                IsBoostPressureProtectionActive = false;
-                IsOilTemperatureProtectionActive = false;
+                // Здесь может потребоваться реализация специальной команды в протоколе
+                // Пока просто меняем локальное состояние
+                AllProtectionsEnabled = newState;
 
-                LogProtectionEvent("Система защит", "Защиты отключены", "Все защиты отключены");
-                _loggingService.LogWarning("Все защиты отключены");
-                StatusMessage = "Все защиты отключены";
+                if (!AllProtectionsEnabled)
+                {
+                    // Сбрасываем все активные защиты при отключении
+                    IsOilPressureProtectionActive = false;
+                    IsEngineSpeedProtectionActive = false;
+                    IsBoostPressureProtectionActive = false;
+                    IsOilTemperatureProtectionActive = false;
+
+                    LogProtectionEvent("Система защит", "Защиты отключены", "Все защиты отключены");
+                    _loggingService.LogWarning("Все защиты отключены");
+                    StatusMessage = "Все защиты отключены";
+                }
+                else
+                {
+                    LogProtectionEvent("Система защит", "Защиты включены", "Все защиты включены");
+                    _loggingService.LogInfo("Все защиты включены");
+                    StatusMessage = "Все защиты включены";
+
+                    // Повторно проверяем состояние защит
+                    CheckOilPressureProtection();
+                    CheckEngineSpeedProtection();
+                    CheckBoostPressureProtection();
+                    CheckOilTemperatureProtection();
+                }
             }
             else
             {
-                LogProtectionEvent("Система защит", "Защиты включены", "Все защиты включены");
-                _loggingService.LogInfo("Все защиты включены");
-                StatusMessage = "Все защиты включены";
-
-                // Повторно проверяем состояние защит
-                CheckOilPressureProtection();
-                CheckEngineSpeedProtection();
-                CheckBoostPressureProtection();
-                CheckOilTemperatureProtection();
+                StatusMessage = "Невозможно изменить состояние защит: нет соединения";
+                _loggingService.LogWarning("Попытка изменения состояния защит при отсутствии соединения");
             }
         }
 

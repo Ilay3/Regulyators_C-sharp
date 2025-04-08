@@ -1,9 +1,10 @@
 ﻿using System;
-using System.Threading;
+using System.Windows;
 using System.Windows.Input;
 using System.Windows.Media;
 using Regulyators.UI.Common;
 using Regulyators.UI.Models;
+using Regulyators.UI.Services;
 
 namespace Regulyators.UI.ViewModels
 {
@@ -12,8 +13,9 @@ namespace Regulyators.UI.ViewModels
     /// </summary>
     public class EngineControlViewModel : ViewModelBase
     {
-        private readonly Timer _updateTimer;
-        private readonly Random _random;
+        private readonly ComPortService _comPortService;
+        private readonly LoggingService _loggingService;
+
         private EngineControl _engineControl;
         private double _currentEngineSpeed;
         private string _currentEngineMode;
@@ -26,6 +28,8 @@ namespace Regulyators.UI.ViewModels
         private bool _isLoaded;
         private bool _isIdle = true;
         private bool _isSlipping;
+        private string _statusMessage;
+        private bool _isConnected;
 
         /// <summary>
         /// Модель управления двигателем
@@ -88,6 +92,24 @@ namespace Regulyators.UI.ViewModels
         {
             get => _protectionStatusColor;
             set => SetProperty(ref _protectionStatusColor, value);
+        }
+
+        /// <summary>
+        /// Статусное сообщение
+        /// </summary>
+        public string StatusMessage
+        {
+            get => _statusMessage;
+            set => SetProperty(ref _statusMessage, value);
+        }
+
+        /// <summary>
+        /// Флаг подключения к оборудованию
+        /// </summary>
+        public bool IsConnected
+        {
+            get => _isConnected;
+            set => SetProperty(ref _isConnected, value);
         }
 
         /// <summary>
@@ -193,7 +215,8 @@ namespace Regulyators.UI.ViewModels
         /// </summary>
         public EngineControlViewModel()
         {
-            _random = new Random();
+            _comPortService = ComPortService.Instance;
+            _loggingService = LoggingService.Instance;
 
             // Инициализация модели управления
             EngineControl = new EngineControl
@@ -212,6 +235,10 @@ namespace Regulyators.UI.ViewModels
             CurrentRackPosition = 0;
             ProtectionStatus = "Неактивна";
             ProtectionStatusColor = Brushes.Green;
+            StatusMessage = "Готов к работе";
+
+            // Проверка подключения
+            IsConnected = _comPortService.IsConnected;
 
             // Инициализация команд
             SetEngineModeCommand = new RelayCommand<string>(SetEngineMode);
@@ -223,8 +250,103 @@ namespace Regulyators.UI.ViewModels
             StartEngineCommand = new RelayCommand(OnStartEngine);
             StopEngineCommand = new RelayCommand(OnStopEngine);
 
-            // Инициализация таймера обновления данных
-            _updateTimer = new Timer(UpdateParameters, null, 500, 500);
+            // Подписка на события COM-порта
+            _comPortService.DataReceived += OnDataReceived;
+            _comPortService.ConnectionStatusChanged += OnConnectionStatusChanged;
+            _comPortService.ErrorOccurred += OnErrorOccurred;
+
+            // Запрос текущих параметров
+            RefreshParameters();
+        }
+
+        /// <summary>
+        /// Обработчик события получения данных от COM-порта
+        /// </summary>
+        private void OnDataReceived(object sender, EngineParameters parameters)
+        {
+            try
+            {
+                Application.Current.Dispatcher.Invoke(() =>
+                {
+                    CurrentEngineSpeed = parameters.EngineSpeed;
+                    CurrentRackPosition = parameters.RackPosition;
+
+                    StatusMessage = $"Данные обновлены: {parameters.Timestamp:HH:mm:ss}";
+                });
+            }
+            catch (Exception ex)
+            {
+                _loggingService.LogError("Ошибка обработки полученных данных", ex.Message);
+            }
+        }
+
+        /// <summary>
+        /// Обработчик события изменения статуса подключения
+        /// </summary>
+        private void OnConnectionStatusChanged(object sender, bool isConnected)
+        {
+            try
+            {
+                Application.Current.Dispatcher.Invoke(() =>
+                {
+                    IsConnected = isConnected;
+                    StatusMessage = isConnected ? "Подключено к оборудованию" : "Нет подключения к оборудованию";
+
+                    if (isConnected)
+                    {
+                        RefreshParameters();
+                    }
+                });
+            }
+            catch (Exception ex)
+            {
+                _loggingService.LogError("Ошибка обработки изменения статуса подключения", ex.Message);
+            }
+        }
+
+        /// <summary>
+        /// Обработчик события ошибки COM-порта
+        /// </summary>
+        private void OnErrorOccurred(object sender, string errorMessage)
+        {
+            try
+            {
+                Application.Current.Dispatcher.Invoke(() =>
+                {
+                    StatusMessage = $"Ошибка: {errorMessage}";
+                });
+            }
+            catch (Exception ex)
+            {
+                _loggingService.LogError("Ошибка обработки события ошибки COM-порта", ex.Message);
+            }
+        }
+
+        /// <summary>
+        /// Запрос текущих параметров
+        /// </summary>
+        private void RefreshParameters()
+        {
+            if (IsConnected)
+            {
+                // Отправка команды запроса параметров
+                _comPortService.SendCommand(new ERCHM30TZCommand
+                {
+                    CommandType = CommandType.GetParameters
+                });
+
+                // Отправка команды запроса статуса защит
+                _comPortService.SendCommand(new ERCHM30TZCommand
+                {
+                    CommandType = CommandType.GetProtectionStatus
+                });
+
+                StatusMessage = "Запрос параметров отправлен";
+            }
+            else
+            {
+                StatusMessage = "Нет подключения к оборудованию";
+            }
         }
 
         /// <summary>
@@ -232,14 +354,37 @@ namespace Regulyators.UI.ViewModels
         /// </summary>
         private void SetEngineMode(string mode)
         {
+            if (!IsConnected)
+            {
+                StatusMessage = "Невозможно установить режим: нет подключения";
+                return;
+            }
+
+            EngineMode engineMode;
             if (mode == "Stop")
             {
+                engineMode = EngineMode.Stop;
                 IsEngineStop = true;
             }
             else if (mode == "Run")
             {
+                engineMode = EngineMode.Run;
                 IsEngineRun = true;
             }
+            else
+            {
+                return;
+            }
+
+            // Отправка команды установки режима
+            _comPortService.SendCommand(new ERCHM30TZCommand
+            {
+                CommandType = CommandType.SetEngineMode,
+                EngineMode = engineMode
+            });
+
+            StatusMessage = $"Команда установки режима работы отправлена: {(engineMode == EngineMode.Stop ? "ОСТАНОВ" : "РАБОТА")}";
+            _loggingService.LogInfo($"Установка режима работы: {(engineMode == EngineMode.Stop ? "ОСТАНОВ" : "РАБОТА")}");
         }
 
         /// <summary>
@@ -247,18 +392,40 @@ namespace Regulyators.UI.ViewModels
         /// </summary>
         private void SetLoadType(string loadType)
         {
+            if (!IsConnected)
+            {
+                StatusMessage = "Невозможно установить тип нагрузки: нет подключения";
+                return;
+            }
+
+            LoadType engineLoadType;
             switch (loadType)
             {
                 case "Loaded":
+                    engineLoadType = LoadType.Loaded;
                     IsLoaded = true;
                     break;
                 case "Idle":
+                    engineLoadType = LoadType.Idle;
                     IsIdle = true;
                     break;
                 case "Slipping":
+                    engineLoadType = LoadType.Slipping;
                     IsSlipping = true;
                     break;
+                default:
+                    return;
             }
+
+            // Отправка команды установки типа нагрузки
+            _comPortService.SendCommand(new ERCHM30TZCommand
+            {
+                CommandType = CommandType.SetLoadType,
+                LoadType = engineLoadType
+            });
+
+            StatusMessage = $"Команда установки типа нагрузки отправлена: {CurrentLoadType}";
+            _loggingService.LogInfo($"Установка типа нагрузки: {CurrentLoadType}");
         }
 
         /// <summary>
@@ -266,8 +433,21 @@ namespace Regulyators.UI.ViewModels
         /// </summary>
         private void OnSetEngineSpeed()
         {
-            // В реальном приложении здесь была бы отправка команды на контроллер
-            CurrentEngineSpeed = EngineControl.TargetEngineSpeed;
+            if (!IsConnected)
+            {
+                StatusMessage = "Невозможно установить обороты: нет подключения";
+                return;
+            }
+
+            // Отправка команды установки оборотов
+            _comPortService.SendCommand(new ERCHM30TZCommand
+            {
+                CommandType = CommandType.SetEngineSpeed,
+                EngineSpeed = EngineControl.TargetEngineSpeed
+            });
+
+            StatusMessage = $"Команда установки оборотов отправлена: {EngineControl.TargetEngineSpeed:F0} об/мин";
+            _loggingService.LogInfo($"Установка оборотов двигателя: {EngineControl.TargetEngineSpeed:F0} об/мин");
         }
 
         /// <summary>
@@ -275,8 +455,21 @@ namespace Regulyators.UI.ViewModels
         /// </summary>
         private void OnSetRackPosition()
         {
-            // В реальном приложении здесь была бы отправка команды на контроллер
-            CurrentRackPosition = EngineControl.RackPosition;
+            if (!IsConnected)
+            {
+                StatusMessage = "Невозможно установить положение рейки: нет подключения";
+                return;
+            }
+
+            // Отправка команды установки положения рейки
+            _comPortService.SendCommand(new ERCHM30TZCommand
+            {
+                CommandType = CommandType.SetRackPosition,
+                RackPosition = EngineControl.RackPosition
+            });
+
+            StatusMessage = $"Команда установки положения рейки отправлена: {EngineControl.RackPosition:F2}";
+            _loggingService.LogInfo($"Установка положения рейки: {EngineControl.RackPosition:F2}");
         }
 
         /// <summary>
@@ -284,7 +477,21 @@ namespace Regulyators.UI.ViewModels
         /// </summary>
         private void OnSetEquipmentPosition()
         {
-            // В реальном приложении здесь была бы отправка команды на контроллер
+            if (!IsConnected)
+            {
+                StatusMessage = "Невозможно установить позицию оборудования: нет подключения";
+                return;
+            }
+
+            // Отправка команды установки позиции оборудования
+            _comPortService.SendCommand(new ERCHM30TZCommand
+            {
+                CommandType = CommandType.SetEquipmentPosition,
+                EquipmentPosition = EngineControl.EquipmentPosition
+            });
+
+            StatusMessage = $"Команда установки позиции оборудования отправлена: {EngineControl.EquipmentPosition}";
+            _loggingService.LogInfo($"Установка позиции оборудования: {EngineControl.EquipmentPosition}");
         }
 
         /// <summary>
@@ -292,36 +499,32 @@ namespace Regulyators.UI.ViewModels
         /// </summary>
         private void OnQuickCommand(string commandNumber)
         {
-            // Демонстрационная логика быстрых команд
-            switch (commandNumber)
+            if (!IsConnected)
             {
-                case "1":
-                    EngineControl.TargetEngineSpeed = 800;
-                    break;
-                case "2":
-                    EngineControl.TargetEngineSpeed = 1000;
-                    break;
-                case "3":
-                    EngineControl.TargetEngineSpeed = 1200;
-                    break;
-                case "4":
-                    EngineControl.TargetEngineSpeed = 1400;
-                    break;
-                case "5":
-                    EngineControl.TargetEngineSpeed = 1600;
-                    break;
-                case "6":
-                    EngineControl.TargetEngineSpeed = 1800;
-                    break;
-                case "7":
-                    EngineControl.TargetEngineSpeed = 2000;
-                    break;
-                case "8":
-                    EngineControl.TargetEngineSpeed = 2200;
-                    break;
+                StatusMessage = "Невозможно выполнить команду: нет подключения";
+                return;
             }
 
-            // Применение команды
+            double targetSpeed = 800;
+
+            // Преобразование номера команды в целевую скорость
+            switch (commandNumber)
+            {
+                case "1": targetSpeed = 800; break;
+                case "2": targetSpeed = 1000; break;
+                case "3": targetSpeed = 1200; break;
+                case "4": targetSpeed = 1400; break;
+                case "5": targetSpeed = 1600; break;
+                case "6": targetSpeed = 1800; break;
+                case "7": targetSpeed = 2000; break;
+                case "8": targetSpeed = 2200; break;
+                default: return;
+            }
+
+            // Установка целевой скорости
+            EngineControl.TargetEngineSpeed = targetSpeed;
+
+            // Отправка команды
             OnSetEngineSpeed();
         }
 
@@ -330,7 +533,14 @@ namespace Regulyators.UI.ViewModels
         /// </summary>
         private void OnStartEngine()
         {
-            IsEngineRun = true;
+            if (!IsConnected)
+            {
+                StatusMessage = "Невозможно запустить двигатель: нет подключения";
+                return;
+            }
+
+            // Установка режима РАБОТА
+            SetEngineMode("Run");
         }
 
         /// <summary>
@@ -338,51 +548,14 @@ namespace Regulyators.UI.ViewModels
         /// </summary>
         private void OnStopEngine()
         {
-            IsEngineStop = true;
-        }
-
-        /// <summary>
-        /// Обновление параметров двигателя (демо-режим)
-        /// </summary>
-        private void UpdateParameters(object state)
-        {
-            if (EngineControl.EngineMode == EngineMode.Run)
+            if (!IsConnected)
             {
-                // Генерация рандомных значений для демонстрации
-                double speedVariation = _random.Next(-50, 50);
-                double targetSpeed = EngineControl.TargetEngineSpeed + speedVariation;
-
-                // Статус защиты иногда случайно активируется
-                bool randomProtection = _random.Next(100) < 5;
-
-                // Обновление данных в UI потоке
-                System.Windows.Application.Current.Dispatcher.Invoke(() =>
-                {
-                    CurrentEngineSpeed = targetSpeed;
-                    CurrentRackPosition = EngineControl.RackPosition;
-
-                    if (randomProtection)
-                    {
-                        ProtectionStatus = "Активна";
-                        ProtectionStatusColor = Brushes.Red;
-                    }
-                    else
-                    {
-                        ProtectionStatus = "Неактивна";
-                        ProtectionStatusColor = Brushes.Green;
-                    }
-                });
+                StatusMessage = "Невозможно остановить двигатель: нет подключения";
+                return;
             }
-            else
-            {
-                // Если двигатель остановлен
-                System.Windows.Application.Current.Dispatcher.Invoke(() =>
-                {
-                    CurrentEngineSpeed = 0;
-                    ProtectionStatus = "Неактивна";
-                    ProtectionStatusColor = Brushes.Green;
-                });
-            }
+
+            // Установка режима ОСТАНОВ
+            SetEngineMode("Stop");
         }
     }
 }

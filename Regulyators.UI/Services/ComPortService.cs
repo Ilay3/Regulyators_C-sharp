@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.IO.Ports;
 using System.Threading;
 using System.Threading.Tasks;
+using System.Linq;
 using Regulyators.UI.Models;
 
 namespace Regulyators.UI.Services
@@ -20,6 +21,9 @@ namespace Regulyators.UI.Services
         private CancellationTokenSource _cancellationTokenSource;
         private Task _processingTask;
         private readonly LoggingService _loggingService;
+        private readonly Queue<TaskCompletionSource<bool>> _commandCompletionQueue;
+        private int _maxRetryAttempts = 3;
+        private int _reconnectDelay = 2000; // 2 секунды
 
         /// <summary>
         /// Событие получения новых данных с порта
@@ -35,6 +39,11 @@ namespace Regulyators.UI.Services
         /// Событие возникновения ошибки
         /// </summary>
         public event EventHandler<string> ErrorOccurred;
+
+        /// <summary>
+        /// Событие обновления статуса защит
+        /// </summary>
+        public event EventHandler<ProtectionStatus> ProtectionStatusUpdated;
 
         /// <summary>
         /// Текущие настройки порта
@@ -70,6 +79,7 @@ namespace Regulyators.UI.Services
         private ComPortService()
         {
             _commandQueue = new Queue<ERCHM30TZCommand>();
+            _commandCompletionQueue = new Queue<TaskCompletionSource<bool>>();
             _loggingService = LoggingService.Instance;
             Settings = new ComPortSettings();
             _isConnected = false;
@@ -95,6 +105,17 @@ namespace Regulyators.UI.Services
 
             Settings = settings;
             _loggingService.LogInfo("Настройки COM-порта обновлены", $"Порт: {settings.PortName}, Скорость: {settings.BaudRate}");
+        }
+
+        /// <summary>
+        /// Установка параметров повторного подключения
+        /// </summary>
+        public void SetReconnectParameters(int maxRetryAttempts, int reconnectDelay)
+        {
+            _maxRetryAttempts = maxRetryAttempts;
+            _reconnectDelay = reconnectDelay;
+            _loggingService.LogInfo("Параметры переподключения обновлены",
+                $"Макс. попыток: {maxRetryAttempts}, Задержка: {reconnectDelay} мс");
         }
 
         /// <summary>
@@ -124,6 +145,10 @@ namespace Regulyators.UI.Services
 
                 _serialPort.Open();
 
+                // Очищаем буферы порта
+                _serialPort.DiscardInBuffer();
+                _serialPort.DiscardOutBuffer();
+
                 IsConnected = true;
 
                 // Запускаем задачи обработки данных
@@ -135,6 +160,20 @@ namespace Regulyators.UI.Services
 
                 _loggingService.LogInfo("Подключение к COM-порту успешно", $"Порт: {Settings.PortName}");
                 return true;
+            }
+            catch (UnauthorizedAccessException)
+            {
+                string errorMessage = $"Ошибка доступа к порту {Settings.PortName}. Порт может быть занят другим приложением.";
+                _loggingService.LogError(errorMessage);
+                ErrorOccurred?.Invoke(this, errorMessage);
+                return false;
+            }
+            catch (ArgumentException ex)
+            {
+                string errorMessage = $"Ошибка в параметрах порта: {ex.Message}";
+                _loggingService.LogError(errorMessage);
+                ErrorOccurred?.Invoke(this, errorMessage);
+                return false;
             }
             catch (Exception ex)
             {
@@ -163,7 +202,11 @@ namespace Regulyators.UI.Services
                     {
                         try
                         {
-                            _processingTask.Wait(1000); // Даем задаче завершиться
+                            // Даем задаче завершиться с таймаутом
+                            if (!_processingTask.Wait(1000))
+                            {
+                                _loggingService.LogWarning("Превышено время ожидания завершения задачи обработки команд");
+                            }
                         }
                         catch (AggregateException)
                         {
@@ -178,10 +221,17 @@ namespace Regulyators.UI.Services
 
                 IsConnected = false;
 
-                // Очищаем очередь команд
+                // Очищаем очередь команд и задач завершения
                 lock (_lockObj)
                 {
                     _commandQueue.Clear();
+
+                    // Сообщаем всем ожидающим задачам о невозможности выполнения
+                    while (_commandCompletionQueue.Count > 0)
+                    {
+                        var tcs = _commandCompletionQueue.Dequeue();
+                        tcs.TrySetResult(false);
+                    }
                 }
 
                 _loggingService.LogInfo("Отключение от COM-порта выполнено", $"Порт: {Settings.PortName}");
@@ -198,8 +248,10 @@ namespace Regulyators.UI.Services
         /// <summary>
         /// Отправка команды в контроллер
         /// </summary>
-        public void SendCommand(ERCHM30TZCommand command)
+        public Task<bool> SendCommandAsync(ERCHM30TZCommand command)
         {
+            var tcs = new TaskCompletionSource<bool>();
+
             try
             {
                 // Логируем команду
@@ -209,14 +261,28 @@ namespace Regulyators.UI.Services
                 lock (_lockObj)
                 {
                     _commandQueue.Enqueue(command);
+                    _commandCompletionQueue.Enqueue(tcs);
                 }
+
+                return tcs.Task;
             }
             catch (Exception ex)
             {
                 string errorMessage = $"Ошибка добавления команды в очередь: {ex.Message}";
                 _loggingService.LogError(errorMessage, ex.StackTrace);
                 ErrorOccurred?.Invoke(this, errorMessage);
+                tcs.TrySetResult(false);
+                return tcs.Task;
             }
+        }
+
+        /// <summary>
+        /// Отправка команды в контроллер (синхронная версия)
+        /// </summary>
+        public void SendCommand(ERCHM30TZCommand command)
+        {
+            // Асинхронная версия, но без ожидания результата
+            _ = SendCommandAsync(command);
         }
 
         /// <summary>
@@ -299,7 +365,15 @@ namespace Regulyators.UI.Services
         {
             try
             {
+                // Сначала очищаем буфер ввода, чтобы не было мусора от предыдущих операций
+                _serialPort.DiscardInBuffer();
+
+                // Отправляем данные
                 _serialPort.Write(data, 0, data.Length);
+
+                // Логируем в hex-формате для отладки
+                _loggingService.LogInfo("Отправлены данные", BitConverter.ToString(data).Replace("-", " "));
+
                 return true;
             }
             catch (TimeoutException)
@@ -307,6 +381,14 @@ namespace Regulyators.UI.Services
                 string errorMessage = "Таймаут отправки данных";
                 _loggingService.LogWarning(errorMessage);
                 ErrorOccurred?.Invoke(this, errorMessage);
+                return false;
+            }
+            catch (InvalidOperationException)
+            {
+                string errorMessage = "Порт закрыт или недоступен при попытке отправки данных";
+                _loggingService.LogError(errorMessage);
+                ErrorOccurred?.Invoke(this, errorMessage);
+                IsConnected = false;
                 return false;
             }
             catch (Exception ex)
@@ -322,7 +404,7 @@ namespace Regulyators.UI.Services
         /// <summary>
         /// Чтение данных из COM-порта
         /// </summary>
-        private byte[] ReadData(int bytesToRead)
+        private byte[] ReadData(int bytesToRead, int timeout = -1)
         {
             if (!IsConnected || _serialPort == null || !_serialPort.IsOpen)
             {
@@ -332,8 +414,22 @@ namespace Regulyators.UI.Services
 
             try
             {
+                // Если установлен таймаут, сохраняем старое значение и устанавливаем новое
+                int oldTimeout = -1;
+                if (timeout > 0)
+                {
+                    oldTimeout = _serialPort.ReadTimeout;
+                    _serialPort.ReadTimeout = timeout;
+                }
+
                 byte[] buffer = new byte[bytesToRead];
                 int bytesRead = _serialPort.Read(buffer, 0, bytesToRead);
+
+                // Восстанавливаем таймаут, если был изменен
+                if (oldTimeout > 0)
+                {
+                    _serialPort.ReadTimeout = oldTimeout;
+                }
 
                 if (bytesRead != bytesToRead)
                 {
@@ -344,6 +440,9 @@ namespace Regulyators.UI.Services
                     return result;
                 }
 
+                // Логируем полученные данные в hex для отладки
+                _loggingService.LogInfo("Получены данные", BitConverter.ToString(buffer).Replace("-", " "));
+
                 return buffer;
             }
             catch (TimeoutException)
@@ -351,6 +450,14 @@ namespace Regulyators.UI.Services
                 string errorMessage = "Таймаут чтения данных";
                 _loggingService.LogWarning(errorMessage);
                 ErrorOccurred?.Invoke(this, errorMessage);
+                return null;
+            }
+            catch (InvalidOperationException)
+            {
+                string errorMessage = "Порт закрыт или недоступен при попытке чтения данных";
+                _loggingService.LogError(errorMessage);
+                ErrorOccurred?.Invoke(this, errorMessage);
+                IsConnected = false;
                 return null;
             }
             catch (Exception ex)
@@ -368,21 +475,31 @@ namespace Regulyators.UI.Services
         /// </summary>
         private bool TryReconnect()
         {
+            int attemptCount = 0;
+
             try
             {
-                _loggingService.LogInfo("Попытка переподключения", $"Порт: {Settings.PortName}");
+                while (attemptCount < _maxRetryAttempts)
+                {
+                    attemptCount++;
+                    _loggingService.LogInfo($"Попытка переподключения {attemptCount}/{_maxRetryAttempts}", $"Порт: {Settings.PortName}");
 
-                Disconnect();
-                Thread.Sleep(1000); // Пауза перед переподключением
+                    // Сначала отключаемся, чтобы очистить ресурсы
+                    Disconnect();
 
-                bool result = Connect();
+                    // Ждем перед повторной попыткой
+                    Thread.Sleep(_reconnectDelay);
 
-                if (result)
-                    _loggingService.LogInfo("Переподключение успешно", $"Порт: {Settings.PortName}");
-                else
-                    _loggingService.LogError("Не удалось переподключиться", $"Порт: {Settings.PortName}");
+                    // Пробуем подключиться снова
+                    if (Connect())
+                    {
+                        _loggingService.LogInfo("Переподключение успешно", $"Порт: {Settings.PortName}");
+                        return true;
+                    }
+                }
 
-                return result;
+                _loggingService.LogError($"Не удалось переподключиться после {attemptCount} попыток", $"Порт: {Settings.PortName}");
+                return false;
             }
             catch (Exception ex)
             {
@@ -403,42 +520,62 @@ namespace Regulyators.UI.Services
             while (!cancellationToken.IsCancellationRequested)
             {
                 ERCHM30TZCommand command = null;
+                TaskCompletionSource<bool> commandCompletion = null;
 
                 // Извлекаем команду из очереди
                 lock (_lockObj)
                 {
-                    if (_commandQueue.Count > 0)
+                    if (_commandQueue.Count > 0 && _commandCompletionQueue.Count > 0)
                     {
                         command = _commandQueue.Dequeue();
+                        commandCompletion = _commandCompletionQueue.Dequeue();
                     }
                 }
 
-                if (command != null)
+                if (command != null && commandCompletion != null)
                 {
                     _loggingService.LogInfo($"Обработка команды из очереди: {command.CommandType}");
 
                     // Формируем пакет данных для отправки
                     byte[] packet = ComposePacket(command);
 
-                    if (SendData(packet))
-                    {
-                        _loggingService.LogInfo("Команда отправлена успешно", $"Тип: {command.CommandType}");
+                    bool success = false;
+                    int retryCount = 0;
 
-                        // Ждем ответа
-                        await ReadResponseAsync(command);
-                    }
-                    else
+                    // Пробуем отправить команду с возможностью повтора при ошибке
+                    while (!success && retryCount < 3 && !cancellationToken.IsCancellationRequested)
                     {
-                        _loggingService.LogWarning("Не удалось отправить команду, возврат в очередь", $"Тип: {command.CommandType}");
-
-                        // Если не удалось отправить, возвращаем команду в очередь
-                        lock (_lockObj)
+                        if (retryCount > 0)
                         {
-                            _commandQueue.Enqueue(command);
+                            _loggingService.LogInfo($"Повторная отправка команды: {command.CommandType}, попытка {retryCount + 1}/3");
+                            await Task.Delay(100, cancellationToken); // Небольшая задержка перед повтором
                         }
 
-                        // Делаем паузу перед следующей попыткой
-                        await Task.Delay(1000, cancellationToken);
+                        if (SendData(packet))
+                        {
+                            _loggingService.LogInfo("Команда отправлена успешно", $"Тип: {command.CommandType}");
+
+                            // Ждем ответа
+                            success = await ReadResponseAsync(command);
+                            if (success)
+                            {
+                                _loggingService.LogInfo("Команда выполнена успешно", $"Тип: {command.CommandType}");
+                                commandCompletion.TrySetResult(true);
+                            }
+                            else
+                            {
+                                _loggingService.LogWarning("Ошибка выполнения команды", $"Тип: {command.CommandType}");
+                            }
+                        }
+
+                        retryCount++;
+                    }
+
+                    // Если все попытки не удались, сообщаем об ошибке
+                    if (!success)
+                    {
+                        _loggingService.LogError($"Не удалось выполнить команду после {retryCount} попыток", $"Тип: {command.CommandType}");
+                        commandCompletion.TrySetResult(false);
                     }
                 }
                 else
@@ -469,6 +606,15 @@ namespace Regulyators.UI.Services
                         CommandType = CommandType.GetParameters
                     });
 
+                    // Периодически запрашиваем статус защит
+                    if (DateTime.Now.Second % 5 == 0) // Каждые 5 секунд
+                    {
+                        SendCommand(new ERCHM30TZCommand
+                        {
+                            CommandType = CommandType.GetProtectionStatus
+                        });
+                    }
+
                     // Пауза между опросами
                     await Task.Delay(Settings.PollingInterval);
                 }
@@ -478,7 +624,7 @@ namespace Regulyators.UI.Services
         /// <summary>
         /// Асинхронное чтение ответа на команду
         /// </summary>
-        private async Task ReadResponseAsync(ERCHM30TZCommand command)
+        private async Task<bool> ReadResponseAsync(ERCHM30TZCommand command)
         {
             try
             {
@@ -487,6 +633,7 @@ namespace Regulyators.UI.Services
                 // Ждем начала ответа
                 await Task.Delay(Settings.ResponseDelay);
 
+                // Проверяем, есть ли данные для чтения
                 if (_serialPort?.BytesToRead > 0)
                 {
                     _loggingService.LogInfo($"Получен ответ, байт доступно: {_serialPort.BytesToRead}");
@@ -496,40 +643,78 @@ namespace Regulyators.UI.Services
 
                     if (header != null && header.Length == 4)
                     {
-                        // Проверяем маркер начала пакета
+                        // Проверяем маркер начала пакета (0xAA, 0x55 для ЭРЧМ30ТЗ)
                         if (header[0] == 0xAA && header[1] == 0x55)
                         {
-                            // Определяем длину данных
+                            // Определяем длину данных из третьего и четвертого байтов (младший и старший байт)
                             int dataLength = header[2] | (header[3] << 8);
 
                             _loggingService.LogInfo($"Получен заголовок ответа, длина данных: {dataLength} байт");
 
-                            // Читаем данные
-                            byte[] data = ReadData(dataLength);
-
-                            if (data != null)
+                            if (dataLength > 0 && dataLength < 1024) // Проверка на разумный размер данных
                             {
-                                // Обрабатываем полученные данные
-                                ProcessResponse(command, data);
+                                // Читаем данные
+                                byte[] data = ReadData(dataLength);
+
+                                if (data != null)
+                                {
+                                    // Читаем контрольную сумму (1 байт)
+                                    byte[] checksumBytes = ReadData(1);
+
+                                    if (checksumBytes != null && checksumBytes.Length == 1)
+                                    {
+                                        byte receivedChecksum = checksumBytes[0];
+
+                                        // Вычисляем контрольную сумму
+                                        byte calculatedChecksum = CalculateChecksum(header.Concat(data).ToArray());
+
+                                        if (receivedChecksum == calculatedChecksum)
+                                        {
+                                            // Обрабатываем полученные данные
+                                            return ProcessResponse(command, data);
+                                        }
+                                        else
+                                        {
+                                            _loggingService.LogWarning(
+                                                $"Ошибка контрольной суммы: получено 0x{receivedChecksum:X2}, вычислено 0x{calculatedChecksum:X2}");
+                                            return false;
+                                        }
+                                    }
+                                    else
+                                    {
+                                        _loggingService.LogWarning("Не удалось прочитать контрольную сумму");
+                                        return false;
+                                    }
+                                }
+                                else
+                                {
+                                    _loggingService.LogWarning("Не удалось прочитать данные ответа");
+                                    return false;
+                                }
                             }
                             else
                             {
-                                _loggingService.LogWarning("Не удалось прочитать данные ответа");
+                                _loggingService.LogWarning($"Недопустимая длина данных: {dataLength}");
+                                return false;
                             }
                         }
                         else
                         {
-                            _loggingService.LogWarning("Неверный маркер начала пакета", $"Получено: 0x{header[0]:X2}{header[1]:X2}, ожидалось: 0xAA55");
+                            _loggingService.LogWarning("Неверный маркер начала пакета",
+                                $"Получено: 0x{header[0]:X2}{header[1]:X2}, ожидалось: 0xAA55");
+                            return false;
                         }
                     }
                     else
                     {
                         _loggingService.LogWarning("Не удалось прочитать заголовок ответа");
+                        return false;
                     }
                 }
                 else
                 {
                     _loggingService.LogWarning("Нет данных для чтения после ожидания ответа");
+                    return false;
                 }
             }
             catch (Exception ex)
@@ -537,13 +722,27 @@ namespace Regulyators.UI.Services
                 string errorMessage = $"Ошибка чтения ответа: {ex.Message}";
                 _loggingService.LogError(errorMessage, ex.StackTrace);
                 ErrorOccurred?.Invoke(this, errorMessage);
+                return false;
             }
+        }
+
+        /// <summary>
+        /// Вычисление контрольной суммы (XOR всех байтов)
+        /// </summary>
+        private byte CalculateChecksum(byte[] data)
+        {
+            byte checksum = 0;
+            foreach (byte b in data)
+            {
+                checksum ^= b; // XOR
+            }
+            return checksum;
         }
 
         /// <summary>
         /// Обработка ответа от контроллера
         /// </summary>
-        private void ProcessResponse(ERCHM30TZCommand command, byte[] data)
+        private bool ProcessResponse(ERCHM30TZCommand command, byte[] data)
         {
             try
             {
@@ -561,45 +760,52 @@ namespace Regulyators.UI.Services
 
                             // Уведомляем подписчиков о новых данных
                             DataReceived?.Invoke(this, parameters);
+                            return true;
                         }
-                        break;
+                        return false;
 
                     case CommandType.SetEngineSpeed:
                         _loggingService.LogInfo("Получен ответ на установку оборотов", $"Статус: {GetStatusFromResponse(data)}");
-                        break;
+                        return data.Length > 0 && data[0] == 0x00; // 0x00 - успех, другое - код ошибки
 
                     case CommandType.SetRackPosition:
                         _loggingService.LogInfo("Получен ответ на установку положения рейки", $"Статус: {GetStatusFromResponse(data)}");
-                        break;
+                        return data.Length > 0 && data[0] == 0x00;
 
                     case CommandType.SetEngineMode:
                         _loggingService.LogInfo("Получен ответ на установку режима двигателя", $"Статус: {GetStatusFromResponse(data)}");
-                        break;
+                        return data.Length > 0 && data[0] == 0x00;
 
                     case CommandType.SetLoadType:
                         _loggingService.LogInfo("Получен ответ на установку типа нагрузки", $"Статус: {GetStatusFromResponse(data)}");
-                        break;
+                        return data.Length > 0 && data[0] == 0x00;
 
                     case CommandType.SetEquipmentPosition:
                         _loggingService.LogInfo("Получен ответ на установку позиции оборудования", $"Статус: {GetStatusFromResponse(data)}");
-                        break;
+                        return data.Length > 0 && data[0] == 0x00;
 
                     case CommandType.GetProtectionStatus:
                         _loggingService.LogInfo("Получен ответ на запрос статуса защит", $"Длина данных: {data.Length} байт");
-                        ParseProtectionStatus(data);
-                        break;
+                        var protectionStatus = ParseProtectionStatus(data);
+                        if (protectionStatus != null)
+                        {
+                            // Уведомляем подписчиков о статусе защит
+                            ProtectionStatusUpdated?.Invoke(this, protectionStatus);
+                            return true;
+                        }
+                        return false;
 
                     case CommandType.SetProtectionThresholds:
                         _loggingService.LogInfo("Получен ответ на установку порогов защит", $"Статус: {GetStatusFromResponse(data)}");
-                        break;
+                        return data.Length > 0 && data[0] == 0x00;
 
                     case CommandType.ResetProtection:
                         _loggingService.LogInfo("Получен ответ на сброс защит", $"Статус: {GetStatusFromResponse(data)}");
-                        break;
+                        return data.Length > 0 && data[0] == 0x00;
 
                     default:
                         _loggingService.LogWarning($"Получен ответ на неизвестную команду: {command.CommandType}");
-                        break;
+                        return false;
                 }
             }
             catch (Exception ex)
@@ -607,6 +813,7 @@ namespace Regulyators.UI.Services
                 string errorMessage = $"Ошибка обработки ответа: {ex.Message}";
                 _loggingService.LogError(errorMessage, ex.StackTrace);
                 ErrorOccurred?.Invoke(this, errorMessage);
+                return false;
             }
         }
 
@@ -624,15 +831,15 @@ namespace Regulyators.UI.Services
         /// <summary>
         /// Разбор статуса защит из ответа
         /// </summary>
-        private void ParseProtectionStatus(byte[] data)
+        private ProtectionStatus ParseProtectionStatus(byte[] data)
         {
             if (data == null || data.Length < 4)
             {
                 _loggingService.LogWarning("Недостаточно данных для разбора статуса защит");
-                return;
+                return null;
             }
 
-            // Пример разбора статуса защит (зависит от протокола)
+            // Разбор статуса защит (байты флагов)
             bool isOilPressureActive = (data[0] & 0x01) != 0;
             bool isEngineSpeedActive = (data[0] & 0x02) != 0;
             bool isBoostPressureActive = (data[0] & 0x04) != 0;
@@ -644,7 +851,14 @@ namespace Regulyators.UI.Services
                 $"Давление наддува: {(isBoostPressureActive ? "АКТИВНА" : "Норма")}, " +
                 $"Температура масла: {(isOilTemperatureActive ? "АКТИВНА" : "Норма")}");
 
-            // Здесь можно было бы вызвать события для оповещения о статусе защит
+            return new ProtectionStatus
+            {
+                IsOilPressureActive = isOilPressureActive,
+                IsEngineSpeedActive = isEngineSpeedActive,
+                IsBoostPressureActive = isBoostPressureActive,
+                IsOilTemperatureActive = isOilTemperatureActive,
+                AllProtectionsEnabled = (data[1] & 0x01) != 0
+            };
         }
 
         /// <summary>
@@ -653,9 +867,6 @@ namespace Regulyators.UI.Services
         private byte[] ComposePacket(ERCHM30TZCommand command)
         {
             // Реализация формирования пакета по протоколу ЭРЧМ30ТЗ
-            // Это упрощенная демонстрационная реализация, которая должна быть заменена
-            // на реальный протокол ЭРЧМ30ТЗ
-
             List<byte> packet = new List<byte>();
 
             // Маркер начала пакета
@@ -682,7 +893,7 @@ namespace Regulyators.UI.Services
                     break;
 
                 case CommandType.SetRackPosition:
-                    // Преобразуем значение положения рейки в байты
+                    // Преобразуем значение положения рейки в байты (умножаем на 100 для точности)
                     data = BitConverter.GetBytes((ushort)(command.RackPosition * 100));
                     dataLength = data.Length;
                     break;
@@ -744,12 +955,14 @@ namespace Regulyators.UI.Services
                 packet.AddRange(data);
             }
 
-            // Контрольная сумма (XOR всех байтов)
+            // Считаем контрольную сумму
             byte checksum = 0;
-            for (int i = 0; i < packet.Count; i++)
+            foreach (byte b in packet)
             {
-                checksum ^= packet[i];
+                checksum ^= b;
             }
+
+            // Добавляем контрольную сумму
             packet.Add(checksum);
 
             _loggingService.LogInfo($"Сформирован пакет данных для команды {command.CommandType}, длина: {packet.Count} байт");
@@ -764,7 +977,8 @@ namespace Regulyators.UI.Services
         {
             if (data == null || data.Length < 12) // Минимальная длина ответа с параметрами
             {
-                _loggingService.LogWarning("Недостаточно данных для разбора параметров двигателя", $"Получено байт: {data?.Length ?? 0}, требуется: 12");
+                _loggingService.LogWarning("Недостаточно данных для разбора параметров двигателя",
+                    $"Получено байт: {data?.Length ?? 0}, требуется: 12");
                 return null;
             }
 
@@ -791,5 +1005,36 @@ namespace Regulyators.UI.Services
                 return null;
             }
         }
+    }
+
+    /// <summary>
+    /// Статус защит системы
+    /// </summary>
+    public class ProtectionStatus
+    {
+        /// <summary>
+        /// Активна ли защита по давлению масла
+        /// </summary>
+        public bool IsOilPressureActive { get; set; }
+
+        /// <summary>
+        /// Активна ли защита по оборотам двигателя
+        /// </summary>
+        public bool IsEngineSpeedActive { get; set; }
+
+        /// <summary>
+        /// Активна ли защита по давлению наддува
+        /// </summary>
+        public bool IsBoostPressureActive { get; set; }
+
+        /// <summary>
+        /// Активна ли защита по температуре масла
+        /// </summary>
+        public bool IsOilTemperatureActive { get; set; }
+
+        /// <summary>
+        /// Включены ли все защиты
+        /// </summary>
+        public bool AllProtectionsEnabled { get; set; }
     }
 }

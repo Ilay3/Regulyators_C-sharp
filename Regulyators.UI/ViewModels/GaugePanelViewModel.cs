@@ -2,23 +2,25 @@
 using System.Collections.Generic;
 using System.ComponentModel;
 using System.Runtime.CompilerServices;
-using System.Threading;
 using System.Windows;
 using System.Windows.Input;
 using Regulyators.UI.Common;
 using Regulyators.UI.Models;
+using Regulyators.UI.Services;
 
 namespace Regulyators.UI.ViewModels
 {
     /// <summary>
-    /// ViewModel для панели аналоговых индикаторов (упрощенная демо-версия)
+    /// ViewModel для панели аналоговых индикаторов
     /// </summary>
     public class GaugePanelViewModel : INotifyPropertyChanged
     {
-        private Timer _updateTimer;
-        private readonly Random _random;
-        private EngineParameters _engineParameters;
+        private readonly ComPortService _comPortService;
+        private readonly LoggingService _loggingService;
         private string _selectedUpdateInterval;
+        private EngineParameters _engineParameters;
+        private bool _isConnected;
+        private string _statusMessage;
 
         #region Свойства
 
@@ -47,8 +49,38 @@ namespace Regulyators.UI.ViewModels
                 {
                     _selectedUpdateInterval = value;
                     OnPropertyChanged();
-                    UpdateTimerInterval();
+                    UpdatePollingInterval();
                 }
+            }
+        }
+
+        /// <summary>
+        /// Статус соединения
+        /// </summary>
+        public bool IsConnected
+        {
+            get => _isConnected;
+            set
+            {
+                if (_isConnected != value)
+                {
+                    _isConnected = value;
+                    OnPropertyChanged();
+                    StatusMessage = value ? "Подключено к оборудованию" : "Нет подключения к оборудованию";
+                }
+            }
+        }
+
+        /// <summary>
+        /// Статусное сообщение
+        /// </summary>
+        public string StatusMessage
+        {
+            get => _statusMessage;
+            set
+            {
+                _statusMessage = value;
+                OnPropertyChanged();
             }
         }
 
@@ -73,34 +105,46 @@ namespace Regulyators.UI.ViewModels
         /// </summary>
         public GaugePanelViewModel()
         {
-            _random = new Random();
+            _comPortService = ComPortService.Instance;
+            _loggingService = LoggingService.Instance;
 
             // Инициализация параметров двигателя
             _engineParameters = new EngineParameters
             {
-                EngineSpeed = 800,
-                TurboCompressorSpeed = 5000,
-                OilPressure = 2.5,
-                BoostPressure = 1.2,
-                OilTemperature = 75,
-                RackPosition = 10,
+                EngineSpeed = 0,
+                TurboCompressorSpeed = 0,
+                OilPressure = 0,
+                BoostPressure = 0,
+                OilTemperature = 0,
+                RackPosition = 0,
                 Timestamp = DateTime.Now
             };
 
-            // Настройка таймера обновления
+            // Настройка выбранного интервала обновления
             _selectedUpdateInterval = "Средняя (500 мс)";
-            _updateTimer = new Timer(UpdateGauges, null, 0, 500);
+
+            // Проверка подключения
+            IsConnected = _comPortService.IsConnected;
 
             // Инициализация команд
             RefreshGaugesCommand = new RelayCommand(RefreshGauges);
             SaveSnapshotCommand = new RelayCommand(SaveSnapshot);
+
+            // Подписка на события обновления данных
+            _comPortService.DataReceived += OnDataReceived;
+            _comPortService.ConnectionStatusChanged += OnConnectionStatusChanged;
+            _comPortService.ErrorOccurred += OnErrorOccurred;
+
+            StatusMessage = IsConnected ? "Подключено к оборудованию" : "Нет подключения к оборудованию";
         }
 
         /// <summary>
-        /// Обновление интервала таймера
+        /// Обновление интервала опроса
         /// </summary>
-        private void UpdateTimerInterval()
+        private void UpdatePollingInterval()
         {
+            if (!IsConnected) return;
+
             int interval = 500; // Значение по умолчанию
 
             if (_selectedUpdateInterval?.Contains("Высокая") == true)
@@ -116,70 +160,67 @@ namespace Regulyators.UI.ViewModels
                 interval = 1000;
             }
 
-            // Пересоздаем таймер с новым интервалом
-            _updateTimer?.Dispose();
-            _updateTimer = new Timer(UpdateGauges, null, 0, interval);
+            // Обновляем интервал опроса в настройках COM-порта
+            var settings = _comPortService.Settings;
+            settings.PollingInterval = interval;
+            _comPortService.UpdateSettings(settings);
+
+            _loggingService.LogInfo($"Интервал обновления изменен: {interval} мс");
+            StatusMessage = $"Интервал обновления: {interval} мс";
         }
 
         /// <summary>
-        /// Обработчик таймера обновления
+        /// Обработчик события получения данных
         /// </summary>
-        private void UpdateGauges(object state)
-        {
-            // Генерация демо-значений
-            GenerateDemoValues();
-        }
-
-        /// <summary>
-        /// Генерация демо-значений
-        /// </summary>
-        private void GenerateDemoValues()
+        private void OnDataReceived(object sender, EngineParameters parameters)
         {
             try
             {
                 Application.Current.Dispatcher.Invoke(() =>
                 {
-                    // Создаем небольшие вариации текущих значений
-                    double engineSpeed = EngineParameters.EngineSpeed + _random.Next(-50, 50);
-                    double turboSpeed = EngineParameters.TurboCompressorSpeed + _random.Next(-200, 200);
-                    double oilPressure = Math.Max(0, EngineParameters.OilPressure + (_random.NextDouble() - 0.5) * 0.3);
-                    double boostPressure = Math.Max(0, EngineParameters.BoostPressure + (_random.NextDouble() - 0.5) * 0.2);
-                    double oilTemperature = EngineParameters.OilTemperature + (_random.NextDouble() - 0.5) * 2;
-                    int rackPosition = Math.Max(0, EngineParameters.RackPosition + _random.Next(-1, 2));
-
-                    // Иногда генерируем критические значения для демонстрации
-                    if (_random.Next(50) == 0) // 2% вероятность
-                    {
-                        switch (_random.Next(4))
-                        {
-                            case 0:
-                                oilPressure = 0.5 + _random.NextDouble() * 0.9; // критически низкое давление масла
-                                break;
-                            case 1:
-                                engineSpeed = 2250 + _random.Next(0, 300); // критически высокие обороты
-                                break;
-                            case 2:
-                                boostPressure = 2.6 + _random.NextDouble() * 0.7; // критически высокое давление наддува
-                                break;
-                            case 3:
-                                oilTemperature = 115 + _random.Next(0, 20); // критически высокая температура масла
-                                break;
-                        }
-                    }
-
-                    // Обновляем значения
-                    EngineParameters.EngineSpeed = engineSpeed;
-                    EngineParameters.TurboCompressorSpeed = turboSpeed;
-                    EngineParameters.OilPressure = oilPressure;
-                    EngineParameters.BoostPressure = boostPressure;
-                    EngineParameters.OilTemperature = oilTemperature;
-                    EngineParameters.RackPosition = rackPosition;
-                    EngineParameters.Timestamp = DateTime.Now;
+                    EngineParameters = parameters;
+                    StatusMessage = $"Данные обновлены: {parameters.Timestamp:HH:mm:ss}";
                 });
             }
-            catch
+            catch (Exception ex)
             {
-                // Игнорируем ошибки для демо
+                _loggingService.LogError("Ошибка обработки данных", ex.Message);
+            }
+        }
+
+        /// <summary>
+        /// Обработчик события изменения статуса подключения
+        /// </summary>
+        private void OnConnectionStatusChanged(object sender, bool isConnected)
+        {
+            try
+            {
+                Application.Current.Dispatcher.Invoke(() =>
+                {
+                    IsConnected = isConnected;
+                });
+            }
+            catch (Exception ex)
+            {
+                _loggingService.LogError("Ошибка обработки статуса подключения", ex.Message);
+            }
+        }
+
+        /// <summary>
+        /// Обработчик события возникновения ошибки
+        /// </summary>
+        private void OnErrorOccurred(object sender, string errorMessage)
+        {
+            try
+            {
+                Application.Current.Dispatcher.Invoke(() =>
+                {
+                    StatusMessage = $"Ошибка: {errorMessage}";
+                });
+            }
+            catch (Exception ex)
+            {
+                _loggingService.LogError("Ошибка обработки события ошибки", ex.Message);
             }
         }
 
@@ -188,7 +229,19 @@ namespace Regulyators.UI.ViewModels
         /// </summary>
         private void RefreshGauges()
         {
-            GenerateDemoValues();
+            if (!IsConnected)
+            {
+                StatusMessage = "Невозможно обновить данные: нет подключения";
+                return;
+            }
+
+            // Отправляем команду запроса параметров
+            _comPortService.SendCommand(new ERCHM30TZCommand
+            {
+                CommandType = CommandType.GetParameters
+            });
+
+            StatusMessage = "Запрос обновления данных отправлен";
         }
 
         /// <summary>
@@ -196,7 +249,8 @@ namespace Regulyators.UI.ViewModels
         /// </summary>
         private void SaveSnapshot()
         {
-            MessageBox.Show("Сохранение снимка (демо-функция)", "Информация", MessageBoxButton.OK, MessageBoxImage.Information);
+            MessageBox.Show("Функция сохранения снимка будет реализована в следующей версии",
+                "Информация", MessageBoxButton.OK, MessageBoxImage.Information);
         }
 
         /// <summary>
@@ -204,7 +258,10 @@ namespace Regulyators.UI.ViewModels
         /// </summary>
         public void Dispose()
         {
-            _updateTimer?.Dispose();
+            // Отписываемся от событий
+            _comPortService.DataReceived -= OnDataReceived;
+            _comPortService.ConnectionStatusChanged -= OnConnectionStatusChanged;
+            _comPortService.ErrorOccurred -= OnErrorOccurred;
         }
 
         #region INotifyPropertyChanged

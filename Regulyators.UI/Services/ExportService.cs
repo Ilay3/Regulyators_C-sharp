@@ -4,7 +4,9 @@ using System.IO;
 using System.Linq;
 using System.Text;
 using System.Text.Json;
+using System.Text.Encodings.Web;
 using System.Threading.Tasks;
+using System.Globalization;
 using Regulyators.UI.Models;
 using Regulyators.UI.ViewModels;
 
@@ -17,6 +19,7 @@ namespace Regulyators.UI.Services
     {
         private static ExportService _instance;
         private readonly LoggingService _loggingService;
+        private readonly CultureInfo _exportCulture = CultureInfo.GetCultureInfo("ru-RU");
 
         /// <summary>
         /// Получение экземпляра сервиса (Singleton)
@@ -41,27 +44,28 @@ namespace Regulyators.UI.Services
                     return false;
                 }
 
+                // Используем выделенную культуру для обеспечения правильного форматирования
                 StringBuilder sb = new StringBuilder();
 
                 // Заголовок CSV
-                sb.AppendLine("Время,Обороты двигателя (об/мин),Обороты турбокомпрессора (об/мин)," +
-                             "Давление масла (кг/см²),Давление наддува (кг/см²)," +
-                             "Температура масла (°C),Положение рейки (код)");
+                sb.AppendLine("Время;Обороты двигателя (об/мин);Обороты турбокомпрессора (об/мин);" +
+                             "Давление масла (кг/см²);Давление наддува (кг/см²);" +
+                             "Температура масла (°C);Положение рейки (код)");
 
                 // Данные
                 foreach (var param in parameters)
                 {
-                    sb.AppendLine($"{param.Timestamp:yyyy-MM-dd HH:mm:ss.fff}," +
-                                  $"{param.EngineSpeed:F0}," +
-                                  $"{param.TurboCompressorSpeed:F0}," +
-                                  $"{param.OilPressure:F2}," +
-                                  $"{param.BoostPressure:F2}," +
-                                  $"{param.OilTemperature:F1}," +
+                    sb.AppendLine($"{param.Timestamp.ToString("yyyy-MM-dd HH:mm:ss.fff", _exportCulture)};" +
+                                  $"{param.EngineSpeed.ToString("F0", _exportCulture)};" +
+                                  $"{param.TurboCompressorSpeed.ToString("F0", _exportCulture)};" +
+                                  $"{param.OilPressure.ToString("F2", _exportCulture)};" +
+                                  $"{param.BoostPressure.ToString("F2", _exportCulture)};" +
+                                  $"{param.OilTemperature.ToString("F1", _exportCulture)};" +
                                   $"{param.RackPosition}");
                 }
 
                 // Запись в файл
-                await File.WriteAllTextAsync(filePath, sb.ToString());
+                await File.WriteAllTextAsync(filePath, sb.ToString(), Encoding.UTF8);
                 _loggingService.LogInfo("Экспорт параметров в CSV", filePath);
 
                 return true;
@@ -88,25 +92,25 @@ namespace Regulyators.UI.Services
 
                 StringBuilder sb = new StringBuilder();
 
-                // Заголовок CSV
-                sb.AppendLine("Время,Система,Сообщение,Подробности");
+                // Заголовок CSV (используем точку с запятой как разделитель для совместимости с Excel)
+                sb.AppendLine("Время;Система;Сообщение;Подробности");
 
                 // Данные
                 foreach (var evt in events)
                 {
-                    // Экранируем кавычками поля, которые могут содержать запятые
-                    string system = evt.System?.Replace("\"", "\"\"");
-                    string message = evt.Message?.Replace("\"", "\"\"");
-                    string details = evt.Details?.Replace("\"", "\"\"");
+                    // Экранируем кавычками поля, которые могут содержать точку с запятой
+                    string system = EscapeCSVField(evt.System);
+                    string message = EscapeCSVField(evt.Message);
+                    string details = EscapeCSVField(evt.Details);
 
-                    sb.AppendLine($"{evt.Timestamp:yyyy-MM-dd HH:mm:ss.fff}," +
-                                  $"\"{system}\"," +
-                                  $"\"{message}\"," +
-                                  $"\"{details}\"");
+                    sb.AppendLine($"{evt.Timestamp.ToString("yyyy-MM-dd HH:mm:ss.fff", _exportCulture)};" +
+                                  $"{system};" +
+                                  $"{message};" +
+                                  $"{details}");
                 }
 
                 // Запись в файл
-                await File.WriteAllTextAsync(filePath, sb.ToString());
+                await File.WriteAllTextAsync(filePath, sb.ToString(), Encoding.UTF8);
                 _loggingService.LogInfo("Экспорт событий защиты в CSV", filePath);
 
                 return true;
@@ -134,24 +138,24 @@ namespace Regulyators.UI.Services
                 StringBuilder sb = new StringBuilder();
 
                 // Заголовок CSV
-                sb.AppendLine("Время,Тип,Сообщение,Подробности");
+                sb.AppendLine("Время;Тип;Сообщение;Подробности");
 
                 // Данные
                 foreach (var log in logs)
                 {
-                    // Экранируем кавычками поля, которые могут содержать запятые
-                    string type = log.Type?.Replace("\"", "\"\"");
-                    string message = log.Message?.Replace("\"", "\"\"");
-                    string details = log.Details?.Replace("\"", "\"\"");
+                    // Экранируем кавычками поля, которые могут содержать точку с запятой
+                    string type = EscapeCSVField(log.Type);
+                    string message = EscapeCSVField(log.Message);
+                    string details = EscapeCSVField(log.Details);
 
-                    sb.AppendLine($"{log.Timestamp:yyyy-MM-dd HH:mm:ss.fff}," +
-                                  $"\"{type}\"," +
-                                  $"\"{message}\"," +
-                                  $"\"{details}\"");
+                    sb.AppendLine($"{log.Timestamp.ToString("yyyy-MM-dd HH:mm:ss.fff", _exportCulture)};" +
+                                  $"{type};" +
+                                  $"{message};" +
+                                  $"{details}");
                 }
 
                 // Запись в файл
-                await File.WriteAllTextAsync(filePath, sb.ToString());
+                await File.WriteAllTextAsync(filePath, sb.ToString(), Encoding.UTF8);
                 _loggingService.LogInfo("Экспорт журнала в CSV", filePath);
 
                 return true;
@@ -178,18 +182,19 @@ namespace Regulyators.UI.Services
                 {
                     ComPort = settingsService.ComPortSettings,
                     Protection = settingsService.ProtectionThresholds,
-                    ExportTime = DateTime.Now
+                    ExportTime = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss", _exportCulture)
                 };
 
                 // Сериализуем в JSON
                 var options = new JsonSerializerOptions
                 {
-                    WriteIndented = true
+                    WriteIndented = true,
+                    Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping // Для корректного отображения кириллицы
                 };
                 string json = JsonSerializer.Serialize(settings, options);
 
                 // Записываем в файл
-                await File.WriteAllTextAsync(filePath, json);
+                await File.WriteAllTextAsync(filePath, json, Encoding.UTF8);
                 _loggingService.LogInfo("Экспорт настроек в JSON", filePath);
 
                 return true;
@@ -235,13 +240,18 @@ namespace Regulyators.UI.Services
                 html.AppendLine("        .warning { color: orange; }");
                 html.AppendLine("        .error { color: red; }");
                 html.AppendLine("        .footer { margin-top: 50px; font-size: 12px; color: #666; text-align: center; }");
+                html.AppendLine("        @media print {");
+                html.AppendLine("            body { font-size: 12px; }");
+                html.AppendLine("            h1 { font-size: 18px; }");
+                html.AppendLine("            h2 { font-size: 16px; }");
+                html.AppendLine("        }");
                 html.AppendLine("    </style>");
                 html.AppendLine("</head>");
                 html.AppendLine("<body>");
 
                 // Заголовок отчета
                 html.AppendLine($"    <h1>Отчет о состоянии системы испытаний регуляторов ЭРЧМ30ТЗ</h1>");
-                html.AppendLine($"    <p>Дата и время формирования: {DateTime.Now:dd.MM.yyyy HH:mm:ss}</p>");
+                html.AppendLine($"    <p>Дата и время формирования: {DateTime.Now.ToString("dd.MM.yyyy HH:mm:ss", _exportCulture)}</p>");
 
                 // Раздел настроек COM-порта
                 html.AppendLine("    <h2>Настройки связи</h2>");
@@ -255,16 +265,17 @@ namespace Regulyators.UI.Services
                 html.AppendLine($"        <tr><td>Таймаут чтения</td><td>{settingsService.ComPortSettings.ReadTimeout} мс</td></tr>");
                 html.AppendLine($"        <tr><td>Таймаут записи</td><td>{settingsService.ComPortSettings.WriteTimeout} мс</td></tr>");
                 html.AppendLine($"        <tr><td>Интервал опроса</td><td>{settingsService.ComPortSettings.PollingInterval} мс</td></tr>");
+                html.AppendLine($"        <tr><td>Задержка ответа</td><td>{settingsService.ComPortSettings.ResponseDelay} мс</td></tr>");
                 html.AppendLine("    </table>");
 
                 // Раздел настроек защит
                 html.AppendLine("    <h2>Настройки защит</h2>");
                 html.AppendLine("    <table>");
                 html.AppendLine("        <tr><th>Параметр</th><th>Значение</th></tr>");
-                html.AppendLine($"        <tr><td>Минимальное давление масла</td><td>{settingsService.ProtectionThresholds.OilPressureMinThreshold:F2} кг/см²</td></tr>");
-                html.AppendLine($"        <tr><td>Максимальные обороты двигателя</td><td>{settingsService.ProtectionThresholds.EngineSpeedMaxThreshold:F0} об/мин</td></tr>");
-                html.AppendLine($"        <tr><td>Максимальное давление наддува</td><td>{settingsService.ProtectionThresholds.BoostPressureMaxThreshold:F2} кг/см²</td></tr>");
-                html.AppendLine($"        <tr><td>Максимальная температура масла</td><td>{settingsService.ProtectionThresholds.OilTemperatureMaxThreshold:F1} °C</td></tr>");
+                html.AppendLine($"        <tr><td>Минимальное давление масла</td><td>{settingsService.ProtectionThresholds.OilPressureMinThreshold.ToString("F2", _exportCulture)} кг/см²</td></tr>");
+                html.AppendLine($"        <tr><td>Максимальные обороты двигателя</td><td>{settingsService.ProtectionThresholds.EngineSpeedMaxThreshold.ToString("F0", _exportCulture)} об/мин</td></tr>");
+                html.AppendLine($"        <tr><td>Максимальное давление наддува</td><td>{settingsService.ProtectionThresholds.BoostPressureMaxThreshold.ToString("F2", _exportCulture)} кг/см²</td></tr>");
+                html.AppendLine($"        <tr><td>Максимальная температура масла</td><td>{settingsService.ProtectionThresholds.OilTemperatureMaxThreshold.ToString("F1", _exportCulture)} °C</td></tr>");
                 html.AppendLine("    </table>");
 
                 // Журнал событий
@@ -291,10 +302,10 @@ namespace Regulyators.UI.Services
                     }
 
                     html.AppendLine($"        <tr class=\"{cssClass}\">");
-                    html.AppendLine($"            <td>{log.Timestamp:dd.MM.yyyy HH:mm:ss}</td>");
-                    html.AppendLine($"            <td>{log.Type}</td>");
-                    html.AppendLine($"            <td>{log.Message}</td>");
-                    html.AppendLine($"            <td>{log.Details}</td>");
+                    html.AppendLine($"            <td>{log.Timestamp.ToString("dd.MM.yyyy HH:mm:ss", _exportCulture)}</td>");
+                    html.AppendLine($"            <td>{HtmlEncode(log.Type)}</td>");
+                    html.AppendLine($"            <td>{HtmlEncode(log.Message)}</td>");
+                    html.AppendLine($"            <td>{HtmlEncode(log.Details)}</td>");
                     html.AppendLine($"        </tr>");
                 }
 
@@ -305,12 +316,32 @@ namespace Regulyators.UI.Services
                 html.AppendLine("        <p>Система испытаний регуляторов ЭРЧМ30ТЗ © ОАО \"Коломенский завод\"</p>");
                 html.AppendLine("    </div>");
 
+                // Добавление скрипта для печати
+                html.AppendLine("    <script>");
+                html.AppendLine("        window.onload = function() {");
+                html.AppendLine("            // Добавляем кнопку печати");
+                html.AppendLine("            var printButton = document.createElement('button');");
+                html.AppendLine("            printButton.textContent = 'Печать отчета';");
+                html.AppendLine("            printButton.style.position = 'fixed';");
+                html.AppendLine("            printButton.style.bottom = '20px';");
+                html.AppendLine("            printButton.style.right = '20px';");
+                html.AppendLine("            printButton.style.padding = '10px';");
+                html.AppendLine("            printButton.style.backgroundColor = '#2196F3';");
+                html.AppendLine("            printButton.style.color = 'white';");
+                html.AppendLine("            printButton.style.border = 'none';");
+                html.AppendLine("            printButton.style.borderRadius = '4px';");
+                html.AppendLine("            printButton.style.cursor = 'pointer';");
+                html.AppendLine("            printButton.onclick = function() { window.print(); };");
+                html.AppendLine("            document.body.appendChild(printButton);");
+                html.AppendLine("        };");
+                html.AppendLine("    </script>");
+
                 // Закрытие HTML
                 html.AppendLine("</body>");
                 html.AppendLine("</html>");
 
                 // Запись в файл
-                await File.WriteAllTextAsync(filePath, html.ToString());
+                await File.WriteAllTextAsync(filePath, html.ToString(), Encoding.UTF8);
                 _loggingService.LogInfo("Экспорт отчета о состоянии системы в HTML", filePath);
 
                 return true;
@@ -320,6 +351,45 @@ namespace Regulyators.UI.Services
                 _loggingService.LogError("Ошибка экспорта отчета о состоянии системы", ex.Message);
                 return false;
             }
+        }
+
+        /// <summary>
+        /// Экранирование поля для CSV 
+        /// (если поле содержит разделитель (;), заключаем его в кавычки и удваиваем внутренние кавычки)
+        /// </summary>
+        private string EscapeCSVField(string field)
+        {
+            if (string.IsNullOrEmpty(field))
+                return string.Empty;
+
+            // Если поле содержит точку с запятой или кавычки, его нужно заключить в кавычки
+            bool needsQuotes = field.Contains(';') || field.Contains('"') || field.Contains('\n') || field.Contains('\r');
+
+            if (needsQuotes)
+            {
+                // Удваиваем все кавычки внутри поля
+                field = field.Replace("\"", "\"\"");
+                // Заключаем поле в кавычки
+                return $"\"{field}\"";
+            }
+
+            return field;
+        }
+
+        /// <summary>
+        /// Кодирование HTML-специальных символов
+        /// </summary>
+        private string HtmlEncode(string text)
+        {
+            if (string.IsNullOrEmpty(text))
+                return string.Empty;
+
+            return text
+                .Replace("&", "&amp;")
+                .Replace("<", "&lt;")
+                .Replace(">", "&gt;")
+                .Replace("\"", "&quot;")
+                .Replace("'", "&#39;");
         }
     }
 }
