@@ -39,9 +39,6 @@ namespace Regulyators.UI.ViewModels
             // Инициализация команд
             ClearLogsCommand = new RelayCommand(ClearLogs);
             ExportLogsCommand = new RelayCommand(ExportLogs);
-
-            // Добавим тестовые записи для демонстрации
-            AddSampleLogs();
         }
 
         /// <summary>
@@ -60,18 +57,6 @@ namespace Regulyators.UI.ViewModels
         {
             // Здесь будет код экспорта
             _loggingService.LogInfo("Экспорт журнала", "Функция в разработке");
-        }
-
-        /// <summary>
-        /// Добавление тестовых записей
-        /// </summary>
-        private void AddSampleLogs()
-        {
-            _loggingService.LogInfo("Приложение запущено", "Версия 1.0");
-            _loggingService.LogInfo("Подключение к оборудованию", "COM1, 38400 бод");
-            _loggingService.LogWarning("Низкое давление масла", "1.2 кг/см², порог 1.5 кг/см²");
-            _loggingService.LogError("Потеря связи с оборудованием", "Таймаут операции");
-            _loggingService.LogInfo("Связь восстановлена");
         }
     }
 }

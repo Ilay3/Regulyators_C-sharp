@@ -19,6 +19,8 @@
             <converters:BoolToBrushConverter x:Key="BoolToBrushConverter"/>
             <converters:ValueToStringWithUnitConverter x:Key="ValueToStringWithUnitConverter"/>
             <converters:ValueToVisibilityConverter x:Key="ValueToVisibilityConverter"/>
+            <converters:EnumToStringConverter x:Key="EnumToStringConverter"/>
+            <converters:BooleanToBrushConverterExt x:Key="BooleanToBrushExt"/>
 
             <!-- Шаблоны для отображения ViewModels -->
             <DataTemplate DataType="{x:Type viewmodels:EngineParametersViewModel}">
@@ -45,6 +47,11 @@
             <!-- Шаблон для аналоговых индикаторов -->
             <DataTemplate DataType="{x:Type viewmodels:GaugePanelViewModel}">
                 <views:GaugePanelView />
+            </DataTemplate>
+
+            <!-- Шаблон для страницы симуляции -->
+            <DataTemplate DataType="{x:Type viewmodels:SimulationViewModel}">
+                <views:SimulationView />
             </DataTemplate>
 
             <!-- Стили для элементов управления -->

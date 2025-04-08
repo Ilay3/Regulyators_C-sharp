@@ -1,13 +1,18 @@
-﻿<!-- ProtectionSystemView.xaml -->
-<UserControl 
+﻿<UserControl 
     x:Class="Regulyators.UI.Views.ProtectionSystemView"
     xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
     xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006" 
     xmlns:d="http://schemas.microsoft.com/expression/blend/2008" 
     xmlns:local="clr-namespace:Regulyators.UI.Views"
+    xmlns:converters="clr-namespace:Regulyators.UI.Converters"
     mc:Ignorable="d" 
     d:DesignHeight="600" d:DesignWidth="800">
+
+    <UserControl.Resources>
+        <converters:BooleanToBrushConverterExt x:Key="BooleanToBrushExt"/>
+        <converters:BoolToStringConverter x:Key="BoolToStringConverter"/>
+    </UserControl.Resources>
 
     <Grid Margin="16">
         <Grid.RowDefinitions>
@@ -57,12 +62,12 @@
 
                     <ToggleButton 
                         Grid.Column="1"
-                        Content="{Binding AllProtectionsEnabled, ConverterParameter='ЗАЩИТЫ ВКЛЮЧЕНЫ;ЗАЩИТЫ ОТКЛЮЧЕНЫ'}"
+                        Content="{Binding AllProtectionsEnabled, Converter={StaticResource BoolToStringConverter}, ConverterParameter='ЗАЩИТЫ ВКЛЮЧЕНЫ;ЗАЩИТЫ ОТКЛЮЧЕНЫ'}"
                         IsChecked="{Binding AllProtectionsEnabled}"
                         Command="{Binding ToggleAllProtectionsCommand}"
                         Padding="8,4"
                         Foreground="White"
-                        Background="{Binding AllProtectionsEnabled, ConverterParameter='Green;Red'}"/>
+                        Background="{Binding AllProtectionsEnabled, Converter={StaticResource BooleanToBrushExt}, ConverterParameter='Green;Red'}"/>
                 </Grid>
 
                 <!-- Текущие значения и индикаторы -->
@@ -337,26 +342,11 @@
                                     VerticalAlignment="Center"/>
                             </Grid>
 
-                            <!-- Кнопки обновления и демо-режима -->
-                            <Grid Margin="0,4">
-                                <Grid.ColumnDefinitions>
-                                    <ColumnDefinition Width="*"/>
-                                    <ColumnDefinition Width="*"/>
-                                </Grid.ColumnDefinitions>
-
-                                <Button 
-                                    Grid.Column="0"
-                                    Content="Обновить" 
-                                    Command="{Binding RefreshCommand}"
-                                    Margin="0,0,4,0"/>
-
-                                <ToggleButton 
-                                    Grid.Column="1"
-                                    Content="{Binding IsDemoMode, ConverterParameter='Демо-режим;Реальный режим'}"
-                                    IsChecked="{Binding IsDemoMode}"
-                                    Command="{Binding ToggleDemoModeCommand}"
-                                    Margin="4,0,0,0"/>
-                            </Grid>
+                            <!-- Кнопка обновления -->
+                            <Button 
+                                Content="Обновить данные" 
+                                Command="{Binding RefreshCommand}"
+                                Margin="0,4"/>
                         </StackPanel>
                     </GroupBox>
                 </Grid>
@@ -382,6 +372,7 @@
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="*"/>
                         <ColumnDefinition Width="Auto"/>
+                        <ColumnDefinition Width="Auto"/>
                     </Grid.ColumnDefinitions>
 
                     <TextBlock 
@@ -393,6 +384,12 @@
 
                     <Button 
                         Grid.Column="1"
+                        Content="Экспорт" 
+                        Command="{Binding ExportEventsCommand}"
+                        Margin="0,0,8,0"/>
+
+                    <Button 
+                        Grid.Column="2"
                         Content="Очистить журнал" 
                         Command="{Binding ClearEventsCommand}"/>
                 </Grid>
@@ -442,14 +439,14 @@
                     Grid.Column="1" 
                     Orientation="Horizontal">
                     <TextBlock 
-                        Text="{Binding IsConnected, ConverterParameter='Подключено;Нет связи'}" 
+                        Text="{Binding IsConnected, Converter={StaticResource BoolToStringConverter}, ConverterParameter='Подключено;Нет связи'}" 
                         Margin="0,0,8,0"
                         VerticalAlignment="Center"/>
 
                     <Ellipse 
                         Width="16" 
                         Height="16" 
-                        Fill="{Binding IsConnected,  ConverterParameter='Green;Red'}" 
+                        Fill="{Binding IsConnected, Converter={StaticResource BooleanToBrushExt}, ConverterParameter='Green;Red'}" 
                         VerticalAlignment="Center"/>
                 </StackPanel>
             </Grid>

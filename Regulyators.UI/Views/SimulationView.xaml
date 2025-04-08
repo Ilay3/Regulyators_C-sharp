@@ -1,0 +1,224 @@
+﻿<UserControl 
+    x:Class="Regulyators.UI.Views.SimulationView"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006" 
+    xmlns:d="http://schemas.microsoft.com/expression/blend/2008" 
+    xmlns:local="clr-namespace:Regulyators.UI.Views"
+    xmlns:viewmodels="clr-namespace:Regulyators.UI.ViewModels"
+    xmlns:converters="clr-namespace:Regulyators.UI.Converters"
+    mc:Ignorable="d" 
+    d:DesignHeight="600" d:DesignWidth="800">
+
+    <UserControl.Resources>
+        <converters:BooleanToBrushConverterExt x:Key="BooleanToBrushExt"/>
+    </UserControl.Resources>
+
+    <Grid Margin="16">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+
+        <!-- Заголовок -->
+        <TextBlock 
+            Grid.Row="0"
+            Text="Симуляция работы регуляторов" 
+            FontSize="18" 
+            FontWeight="Bold" 
+            Margin="0,0,0,16"/>
+
+        <!-- Основное содержимое -->
+        <Grid Grid.Row="1">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="*" />
+            </Grid.ColumnDefinitions>
+
+            <!-- Левая панель - управление симуляцией -->
+            <Border 
+                Grid.Column="0" 
+                BorderBrush="#CCCCCC" 
+                BorderThickness="1" 
+                Margin="0,0,8,0"
+                Padding="16"
+                Background="#F5F5F5"
+                CornerRadius="4">
+                <StackPanel>
+                    <TextBlock 
+                        Text="Управление симуляцией" 
+                        FontSize="16" 
+                        FontWeight="SemiBold" 
+                        Margin="0,0,0,16"/>
+
+                    <!-- Кнопка запуска/остановки симуляции -->
+                    <Button 
+                        Content="{Binding SimulationButtonText}" 
+                        Command="{Binding ToggleSimulationCommand}"
+                        Padding="16,8"
+                        Margin="0,8"
+                        FontWeight="Bold"
+                        Background="{Binding IsSimulationRunning, Converter={StaticResource BooleanToBrushExt}, ConverterParameter='Red;Green'}"
+                        Foreground="White"/>
+
+                    <!-- Индикатор статуса симуляции -->
+                    <Border 
+                        Background="{Binding IsSimulationRunning, Converter={StaticResource BooleanToBrushExt}, ConverterParameter='Green;Gray'}"
+                        Padding="8"
+                        Margin="0,8"
+                        CornerRadius="4">
+                        <TextBlock 
+                            Text="{Binding SimulationStatusText}" 
+                            FontWeight="Bold"
+                            HorizontalAlignment="Center"
+                            Foreground="White"/>
+                    </Border>
+
+                    <!-- Дополнительные настройки симуляции -->
+                    <GroupBox Header="Настройки симуляции" Margin="0,16,0,0">
+                        <StackPanel Margin="8">
+                            <!-- Режим случайных сбоев -->
+                            <CheckBox 
+                                Content="Случайные сбои оборудования" 
+                                IsChecked="{Binding IsRandomFailures}"
+                                Margin="0,4"/>
+
+                            <!-- Режим стресс-теста -->
+                            <CheckBox 
+                                Content="Стресс-тест (агрессивные изменения параметров)" 
+                                IsChecked="{Binding IsStressTest}"
+                                Margin="0,4"/>
+
+                            <!-- Выбор сценария симуляции -->
+                            <Grid Margin="0,8">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="Auto"/>
+                                    <ColumnDefinition Width="*"/>
+                                </Grid.ColumnDefinitions>
+
+                                <TextBlock 
+                                    Grid.Column="0" 
+                                    Text="Сценарий:" 
+                                    VerticalAlignment="Center"
+                                    Margin="0,0,8,0"/>
+
+                                <ComboBox 
+                                    Grid.Column="1" 
+                                    SelectedItem="{Binding SelectedScenario}">
+                                    <ComboBoxItem Content="Стандартный"/>
+                                    <ComboBoxItem Content="Нарастающая нагрузка"/>
+                                    <ComboBoxItem Content="Циклический тест"/>
+                                    <ComboBoxItem Content="Аварийные ситуации"/>
+                                </ComboBox>
+                            </Grid>
+
+                            <!-- Кнопка сброса симуляции -->
+                            <Button 
+                                Content="Сбросить симуляцию" 
+                                Command="{Binding ResetSimulationCommand}"
+                                Margin="0,8,0,0"/>
+                        </StackPanel>
+                    </GroupBox>
+
+                    <!-- Информация о режиме симуляции -->
+                    <TextBlock 
+                        Text="Режим симуляции предназначен для демонстрации и тестирования системы без подключения к реальному оборудованию."
+                        TextWrapping="Wrap"
+                        Margin="0,16,0,0"
+                        Foreground="#555555"/>
+                </StackPanel>
+            </Border>
+
+            <!-- Правая панель - имитация аварийных ситуаций -->
+            <Border 
+                Grid.Column="1" 
+                BorderBrush="#CCCCCC" 
+                BorderThickness="1" 
+                Margin="8,0,0,0"
+                Padding="16"
+                Background="#F5F5F5"
+                CornerRadius="4">
+                <StackPanel>
+                    <TextBlock 
+                        Text="Имитация аварийных ситуаций" 
+                        FontSize="16" 
+                        FontWeight="SemiBold" 
+                        Margin="0,0,0,16"/>
+
+                    <!-- Имитация падения давления масла -->
+                    <Button 
+                        Content="Имитировать падение давления масла" 
+                        Command="{Binding SimulateFaultCommand}"
+                        CommandParameter="OilPressure"
+                        Padding="16,8"
+                        Margin="0,8"
+                        Background="#FF9800"
+                        Foreground="White"/>
+
+                    <!-- Имитация превышения оборотов -->
+                    <Button 
+                        Content="Имитировать превышение оборотов двигателя" 
+                        Command="{Binding SimulateFaultCommand}"
+                        CommandParameter="EngineSpeed"
+                        Padding="16,8"
+                        Margin="0,8"
+                        Background="#FF9800"
+                        Foreground="White"/>
+
+                    <!-- Имитация превышения давления наддува -->
+                    <Button 
+                        Content="Имитировать превышение давления наддува" 
+                        Command="{Binding SimulateFaultCommand}"
+                        CommandParameter="BoostPressure"
+                        Padding="16,8"
+                        Margin="0,8"
+                        Background="#FF9800"
+                        Foreground="White"/>
+
+                    <!-- Имитация перегрева масла -->
+                    <Button 
+                        Content="Имитировать перегрев масла" 
+                        Command="{Binding SimulateFaultCommand}"
+                        CommandParameter="OilTemperature"
+                        Padding="16,8"
+                        Margin="0,8"
+                        Background="#FF9800"
+                        Foreground="White"/>
+
+                    <!-- Имитация потери связи -->
+                    <Button 
+                        Content="Имитировать потерю связи" 
+                        Command="{Binding SimulateFaultCommand}"
+                        CommandParameter="ConnectionLoss"
+                        Padding="16,8"
+                        Margin="0,8"
+                        Background="#F44336"
+                        Foreground="White"/>
+
+                    <!-- Описание возможностей -->
+                    <GroupBox Header="Возможности симуляции" Margin="0,16,0,0">
+                        <StackPanel Margin="8">
+                            <TextBlock Text="• Реалистичная физическая модель двигателя" Margin="0,2"/>
+                            <TextBlock Text="• Имитация инерции и нагрева" Margin="0,2"/>
+                            <TextBlock Text="• Автоматическая проверка защит" Margin="0,2"/>
+                            <TextBlock Text="• Реакция на команды управления" Margin="0,2"/>
+                            <TextBlock Text="• Возможность тестирования всех модулей системы" Margin="0,2"/>
+                        </StackPanel>
+                    </GroupBox>
+                </StackPanel>
+            </Border>
+        </Grid>
+
+        <!-- Статусная строка -->
+        <Border 
+            Grid.Row="2"
+            Background="#E0E0E0" 
+            Padding="8"
+            Margin="0,16,0,0">
+            <TextBlock 
+                Text="{Binding StatusMessage}"
+                VerticalAlignment="Center"/>
+        </Border>
+    </Grid>
+</UserControl>

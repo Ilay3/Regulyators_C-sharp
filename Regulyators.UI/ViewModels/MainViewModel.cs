@@ -124,6 +124,9 @@ namespace Regulyators.UI.ViewModels
             // Новая модель представления для аналоговых индикаторов
             var gaugePanelViewModel = new GaugePanelViewModel();
 
+            // Новая модель представления для симуляции
+            var simulationViewModel = new SimulationViewModel();
+
             // Инициализация меню
             MenuItems = new ObservableCollection<MenuItem>
             {
@@ -144,7 +147,7 @@ namespace Regulyators.UI.ViewModels
                 },
                 new MenuItem
                 {
-                    Title = "Система защит",
+                    Title = "Система защиты",
                     ViewModel = protectionViewModel
                 },
                 new MenuItem
@@ -156,7 +159,13 @@ namespace Regulyators.UI.ViewModels
                 {
                     Title = "Настройки системы",
                     ViewModel = settingsViewModel
+                },
+                new MenuItem
+                {
+                    Title = "Режим симуляции",
+                    ViewModel = simulationViewModel
                 }
+
             };
 
             // Выбор первого пункта меню по умолчанию

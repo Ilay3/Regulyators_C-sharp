@@ -50,6 +50,12 @@ namespace Regulyators.UI.Services
         /// </summary>
         public ComPortSettings Settings { get; private set; }
 
+        // Событие получения команды для симулятора
+        public event EventHandler<ERCHM30TZCommand> CommandReceived;
+
+        // Флаг режима симуляции
+        private bool _isSimulationMode = false;
+
         /// <summary>
         /// Статус соединения
         /// </summary>
@@ -75,6 +81,39 @@ namespace Regulyators.UI.Services
         /// Получение экземпляра сервиса (Singleton)
         /// </summary>
         public static ComPortService Instance => _instance ??= new ComPortService();
+
+        /// <summary>
+        /// Включение или выключение режима симуляции
+        /// </summary>
+        public void SetSimulationMode(bool enabled)
+        {
+            _isSimulationMode = enabled;
+            _loggingService.LogInfo($"Режим симуляции {(enabled ? "включен" : "выключен")}");
+        }
+
+        /// <summary>
+        /// Симуляция состояния подключения
+        /// </summary>
+        public void SimulateConnection(bool isConnected)
+        {
+            IsConnected = isConnected;
+        }
+
+        /// <summary>
+        /// Симуляция получения данных от контроллера
+        /// </summary>
+        public void SimulateDataReceived(EngineParameters parameters)
+        {
+            DataReceived?.Invoke(this, parameters);
+        }
+
+        /// <summary>
+        /// Симуляция обновления статуса защит
+        /// </summary>
+        public void SimulateProtectionStatusUpdated(ProtectionStatus status)
+        {
+            ProtectionStatusUpdated?.Invoke(this, status);
+        }
 
         private ComPortService()
         {
@@ -118,10 +157,11 @@ namespace Regulyators.UI.Services
                 $"Макс. попыток: {maxRetryAttempts}, Задержка: {reconnectDelay} мс");
         }
 
+
         /// <summary>
         /// Подключение к COM-порту
         /// </summary>
-        public bool Connect()
+        public new bool Connect()
         {
             try
             {
@@ -130,9 +170,16 @@ namespace Regulyators.UI.Services
                     return true;
                 }
 
+                if (_isSimulationMode)
+                {
+                    _loggingService.LogInfo("Соединение установлено (режим симуляции)");
+                    IsConnected = true;
+                    return true;
+                }
+
                 _loggingService.LogInfo("Попытка подключения к COM-порту", $"Порт: {Settings.PortName}, Скорость: {Settings.BaudRate}");
 
-                _serialPort = new SerialPort
+                _serialPort = new System.IO.Ports.SerialPort
                 {
                     PortName = Settings.PortName,
                     BaudRate = Settings.BaudRate,
@@ -152,7 +199,7 @@ namespace Regulyators.UI.Services
                 IsConnected = true;
 
                 // Запускаем задачи обработки данных
-                _cancellationTokenSource = new CancellationTokenSource();
+                _cancellationTokenSource = new System.Threading.CancellationTokenSource();
                 _processingTask = Task.Run(() => ProcessCommandQueue(_cancellationTokenSource.Token));
 
                 // Запускаем мониторинг порта
@@ -184,14 +231,22 @@ namespace Regulyators.UI.Services
             }
         }
 
+
         /// <summary>
         /// Отключение от COM-порта
         /// </summary>
-        public void Disconnect()
+        public new void Disconnect()
         {
             try
             {
                 _loggingService.LogInfo("Отключение от COM-порта", $"Порт: {Settings.PortName}");
+
+                if (_isSimulationMode)
+                {
+                    IsConnected = false;
+                    _loggingService.LogInfo("Соединение разорвано (режим симуляции)");
+                    return;
+                }
 
                 if (_serialPort != null && _serialPort.IsOpen)
                 {
@@ -245,6 +300,7 @@ namespace Regulyators.UI.Services
             }
         }
 
+
         /// <summary>
         /// Отправка команды в контроллер
         /// </summary>
@@ -254,14 +310,24 @@ namespace Regulyators.UI.Services
 
             try
             {
-                // Логируем команду
                 LogCommand(command);
 
-                // Добавляем в очередь
-                lock (_lockObj)
+                if (_isSimulationMode)
                 {
-                    _commandQueue.Enqueue(command);
-                    _commandCompletionQueue.Enqueue(tcs);
+                    // В режиме симуляции вызываем событие получения команды
+                    CommandReceived?.Invoke(this, command);
+
+                    // Симулируем успешное выполнение с небольшой задержкой
+                    Task.Delay(100).ContinueWith(_ => tcs.TrySetResult(true));
+                }
+                else
+                {
+                    // Добавляем в очередь
+                    lock (_lockObj)
+                    {
+                        _commandQueue.Enqueue(command);
+                        _commandCompletionQueue.Enqueue(tcs);
+                    }
                 }
 
                 return tcs.Task;
@@ -274,6 +340,7 @@ namespace Regulyators.UI.Services
                 tcs.TrySetResult(false);
                 return tcs.Task;
             }
+
         }
 
         /// <summary>
@@ -1006,6 +1073,8 @@ namespace Regulyators.UI.Services
             }
         }
     }
+
+
 
     /// <summary>
     /// Статус защит системы
