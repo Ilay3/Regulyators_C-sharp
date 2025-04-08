@@ -1,16 +1,21 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
 
-  <PropertyGroup>
-    <OutputType>WinExe</OutputType>
-    <TargetFramework>net8.0-windows</TargetFramework>
-    <Nullable>enable</Nullable>
-    <UseWPF>true</UseWPF>
-   
-  </PropertyGroup>
+	<PropertyGroup>
+		<OutputType>WinExe</OutputType>
+		<TargetFramework>net8.0-windows</TargetFramework>
+		<Nullable>enable</Nullable>
+		<UseWPF>true</UseWPF>
+	</PropertyGroup>
 
-  <ItemGroup>
-    <PackageReference Include="ScottPlot.WPF" Version="4.1.67" />
-    <PackageReference Include="System.IO.Ports" Version="8.0.0" />
-  </ItemGroup>
+	<ItemGroup>
+		<PackageReference Include="ScottPlot.WPF" Version="4.1.67" />
+		<PackageReference Include="System.IO.Ports" Version="8.0.0" />
+	</ItemGroup>
+
+	<ItemGroup>
+		<Compile Update="Controls\GaugeControl.cs" />
+	</ItemGroup>
+
+	
 
 </Project>

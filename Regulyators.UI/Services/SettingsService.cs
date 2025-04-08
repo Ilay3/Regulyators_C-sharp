@@ -13,7 +13,7 @@ namespace Regulyators.UI.Services
     {
         private static SettingsService _instance;
         private readonly LoggingService _loggingService;
-        private readonly string _defaultConfigFilePath;
+        private readonly string _defaultConfigPath;
 
         /// <summary>
         /// Настройки COM-порта
@@ -24,6 +24,11 @@ namespace Regulyators.UI.Services
         /// Пороги срабатывания защит
         /// </summary>
         public ProtectionThresholds ProtectionThresholds { get; private set; }
+
+        /// <summary>
+        /// Путь к файлу конфигурации по умолчанию
+        /// </summary>
+        public string DefaultConfigFilePath => _defaultConfigPath;
 
         /// <summary>
         /// Событие изменения настроек
@@ -40,20 +45,22 @@ namespace Regulyators.UI.Services
             _loggingService = LoggingService.Instance;
 
             // Путь к файлу настроек по умолчанию
-            _defaultConfigFilePath = Path.Combine(
+            _defaultConfigPath = Path.Combine(
                 Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
                 "Regulyators",
                 "config.json");
 
             // Обеспечиваем существование директории
-            Directory.CreateDirectory(Path.GetDirectoryName(_defaultConfigFilePath));
+            Directory.CreateDirectory(Path.GetDirectoryName(_defaultConfigPath));
 
             // Инициализация настроек по умолчанию
             ComPortSettings = new ComPortSettings();
             ProtectionThresholds = new ProtectionThresholds();
 
             // Попытка загрузки настроек из файла
-            Task.Run(() => LoadSettingsAsync(_defaultConfigFilePath));
+            LoadSettings(_defaultConfigPath);
+
+            _loggingService.LogInfo("Сервис настроек инициализирован");
         }
 
         /// <summary>
@@ -74,6 +81,8 @@ namespace Regulyators.UI.Services
 
             // Автоматическое сохранение настроек
             SaveSettings();
+
+            _loggingService.LogInfo("Настройки COM-порта обновлены", $"Порт: {settings.PortName}, Скорость: {settings.BaudRate}");
         }
 
         /// <summary>
@@ -94,6 +103,12 @@ namespace Regulyators.UI.Services
 
             // Автоматическое сохранение настроек
             SaveSettings();
+
+            _loggingService.LogInfo("Пороги защит обновлены",
+                $"Давление масла: {thresholds.OilPressureMinThreshold:F2}, " +
+                $"Обороты: {thresholds.EngineSpeedMaxThreshold:F0}, " +
+                $"Давление наддува: {thresholds.BoostPressureMaxThreshold:F2}, " +
+                $"Температура масла: {thresholds.OilTemperatureMaxThreshold:F1}");
         }
 
         /// <summary>
@@ -101,15 +116,18 @@ namespace Regulyators.UI.Services
         /// </summary>
         public void SaveSettings(string filePath = null)
         {
-            filePath ??= _defaultConfigFilePath;
+            filePath ??= _defaultConfigPath;
 
             try
             {
+                _loggingService.LogInfo("Сохранение настроек в файл", filePath);
+
                 // Создаем объект с настройками
                 var settings = new
                 {
                     ComPort = ComPortSettings,
-                    Protection = ProtectionThresholds
+                    Protection = ProtectionThresholds,
+                    LastSaved = DateTime.Now
                 };
 
                 // Преобразуем в JSON с отступами для читаемости
@@ -121,64 +139,75 @@ namespace Regulyators.UI.Services
                 // Сохраняем в файл
                 File.WriteAllText(filePath, json);
 
-                _loggingService.LogInfo("Настройки сохранены", filePath);
+                _loggingService.LogInfo("Настройки успешно сохранены", filePath);
             }
             catch (Exception ex)
             {
-                _loggingService.LogError("Ошибка сохранения настроек", ex.Message);
+                string errorMessage = $"Ошибка сохранения настроек: {ex.Message}";
+                _loggingService.LogError(errorMessage, ex.StackTrace);
+                throw new ApplicationException(errorMessage, ex);
             }
         }
 
         /// <summary>
-        /// Асинхронная загрузка настроек из файла
+        /// Загрузка настроек из файла
         /// </summary>
-        public async Task LoadSettingsAsync(string filePath = null)
+        public void LoadSettings(string filePath = null)
         {
-            filePath ??= _defaultConfigFilePath;
+            filePath ??= _defaultConfigPath;
 
             try
             {
                 if (!File.Exists(filePath))
                 {
-                    _loggingService.LogInfo("Файл настроек не найден, используются значения по умолчанию");
+                    _loggingService.LogInfo("Файл настроек не найден, используются значения по умолчанию", filePath);
                     return;
                 }
 
+                _loggingService.LogInfo("Загрузка настроек из файла", filePath);
+
                 // Читаем JSON из файла
-                string json = await File.ReadAllTextAsync(filePath);
+                string json = File.ReadAllText(filePath);
 
-                // Десериализуем в объект
-                var settingsObj = JsonSerializer.Deserialize<JsonElement>(json);
-
-                if (settingsObj.TryGetProperty("ComPort", out var comPortJson))
+                // Десериализуем настройки
+                using (JsonDocument document = JsonDocument.Parse(json))
                 {
-                    var comPortSettings = JsonSerializer.Deserialize<ComPortSettings>(comPortJson.GetRawText());
-                    if (comPortSettings != null)
+                    // Загрузка настроек COM-порта
+                    if (document.RootElement.TryGetProperty("ComPort", out JsonElement comPortElement))
                     {
-                        ComPortSettings = comPortSettings;
+                        var comPortSettings = JsonSerializer.Deserialize<ComPortSettings>(comPortElement.GetRawText());
+                        if (comPortSettings != null)
+                        {
+                            ComPortSettings = comPortSettings;
+                            _loggingService.LogInfo("Загружены настройки COM-порта", $"Порт: {comPortSettings.PortName}");
+                        }
+                    }
+
+                    // Загрузка порогов защит
+                    if (document.RootElement.TryGetProperty("Protection", out JsonElement protectionElement))
+                    {
+                        var protectionThresholds = JsonSerializer.Deserialize<ProtectionThresholds>(protectionElement.GetRawText());
+                        if (protectionThresholds != null)
+                        {
+                            ProtectionThresholds = protectionThresholds;
+                            _loggingService.LogInfo("Загружены пороги защит");
+                        }
                     }
                 }
-
-                if (settingsObj.TryGetProperty("Protection", out var protectionJson))
-                {
-                    var protectionThresholds = JsonSerializer.Deserialize<ProtectionThresholds>(protectionJson.GetRawText());
-                    if (protectionThresholds != null)
-                    {
-                        ProtectionThresholds = protectionThresholds;
-                    }
-                }
-
-                _loggingService.LogInfo("Настройки загружены", filePath);
 
                 // Уведомление об изменении всех настроек
                 OnSettingsChanged(new SettingsChangedEventArgs
                 {
                     SettingsType = SettingsType.All
                 });
+
+                _loggingService.LogInfo("Настройки успешно загружены", filePath);
             }
             catch (Exception ex)
             {
-                _loggingService.LogError("Ошибка загрузки настроек", ex.Message);
+                string errorMessage = $"Ошибка загрузки настроек: {ex.Message}";
+                _loggingService.LogError(errorMessage, ex.StackTrace);
+                throw new ApplicationException(errorMessage, ex);
             }
         }
 
@@ -187,19 +216,30 @@ namespace Regulyators.UI.Services
         /// </summary>
         public void ResetToDefaults()
         {
-            ComPortSettings = new ComPortSettings();
-            ProtectionThresholds = new ProtectionThresholds();
-
-            // Уведомление об изменении всех настроек
-            OnSettingsChanged(new SettingsChangedEventArgs
+            try
             {
-                SettingsType = SettingsType.All
-            });
+                _loggingService.LogInfo("Сброс настроек по умолчанию");
 
-            // Автоматическое сохранение настроек
-            SaveSettings();
+                ComPortSettings = new ComPortSettings();
+                ProtectionThresholds = new ProtectionThresholds();
 
-            _loggingService.LogInfo("Настройки сброшены по умолчанию");
+                // Уведомление об изменении всех настроек
+                OnSettingsChanged(new SettingsChangedEventArgs
+                {
+                    SettingsType = SettingsType.All
+                });
+
+                // Автоматическое сохранение настроек
+                SaveSettings();
+
+                _loggingService.LogInfo("Настройки успешно сброшены по умолчанию");
+            }
+            catch (Exception ex)
+            {
+                string errorMessage = $"Ошибка сброса настроек: {ex.Message}";
+                _loggingService.LogError(errorMessage, ex.StackTrace);
+                throw new ApplicationException(errorMessage, ex);
+            }
         }
 
         /// <summary>

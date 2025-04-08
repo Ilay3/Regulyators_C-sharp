@@ -1,11 +1,9 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.Data;
 using System.IO.Ports;
 using System.Threading;
 using System.Threading.Tasks;
 using Regulyators.UI.Models;
-using CommandType = Regulyators.UI.Models.CommandType;
 
 namespace Regulyators.UI.Services
 {
@@ -21,6 +19,7 @@ namespace Regulyators.UI.Services
         private readonly object _lockObj = new object();
         private CancellationTokenSource _cancellationTokenSource;
         private Task _processingTask;
+        private readonly LoggingService _loggingService;
 
         /// <summary>
         /// Событие получения новых данных с порта
@@ -54,6 +53,11 @@ namespace Regulyators.UI.Services
                 {
                     _isConnected = value;
                     ConnectionStatusChanged?.Invoke(this, value);
+
+                    if (value)
+                        _loggingService.LogInfo("Соединение с оборудованием установлено", $"Порт: {Settings.PortName}");
+                    else
+                        _loggingService.LogWarning("Соединение с оборудованием потеряно", $"Порт: {Settings.PortName}");
                 }
             }
         }
@@ -66,6 +70,7 @@ namespace Regulyators.UI.Services
         private ComPortService()
         {
             _commandQueue = new Queue<ERCHM30TZCommand>();
+            _loggingService = LoggingService.Instance;
             Settings = new ComPortSettings();
             _isConnected = false;
         }
@@ -89,6 +94,7 @@ namespace Regulyators.UI.Services
             }
 
             Settings = settings;
+            _loggingService.LogInfo("Настройки COM-порта обновлены", $"Порт: {settings.PortName}, Скорость: {settings.BaudRate}");
         }
 
         /// <summary>
@@ -102,6 +108,8 @@ namespace Regulyators.UI.Services
                 {
                     return true;
                 }
+
+                _loggingService.LogInfo("Попытка подключения к COM-порту", $"Порт: {Settings.PortName}, Скорость: {Settings.BaudRate}");
 
                 _serialPort = new SerialPort
                 {
@@ -125,11 +133,14 @@ namespace Regulyators.UI.Services
                 // Запускаем мониторинг порта
                 StartMonitoring();
 
+                _loggingService.LogInfo("Подключение к COM-порту успешно", $"Порт: {Settings.PortName}");
                 return true;
             }
             catch (Exception ex)
             {
-                ErrorOccurred?.Invoke(this, $"Ошибка подключения: {ex.Message}");
+                string errorMessage = $"Ошибка подключения к COM-порту: {ex.Message}";
+                _loggingService.LogError(errorMessage, ex.StackTrace);
+                ErrorOccurred?.Invoke(this, errorMessage);
                 return false;
             }
         }
@@ -141,6 +152,8 @@ namespace Regulyators.UI.Services
         {
             try
             {
+                _loggingService.LogInfo("Отключение от COM-порта", $"Порт: {Settings.PortName}");
+
                 if (_serialPort != null && _serialPort.IsOpen)
                 {
                     // Останавливаем обработку команд
@@ -170,10 +183,15 @@ namespace Regulyators.UI.Services
                 {
                     _commandQueue.Clear();
                 }
+
+                _loggingService.LogInfo("Отключение от COM-порта выполнено", $"Порт: {Settings.PortName}");
             }
             catch (Exception ex)
             {
-                ErrorOccurred?.Invoke(this, $"Ошибка отключения: {ex.Message}");
+                string errorMessage = $"Ошибка отключения от COM-порта: {ex.Message}";
+                _loggingService.LogError(errorMessage, ex.StackTrace);
+                ErrorOccurred?.Invoke(this, errorMessage);
+                IsConnected = false;
             }
         }
 
@@ -182,10 +200,76 @@ namespace Regulyators.UI.Services
         /// </summary>
         public void SendCommand(ERCHM30TZCommand command)
         {
-            lock (_lockObj)
+            try
             {
-                _commandQueue.Enqueue(command);
+                // Логируем команду
+                LogCommand(command);
+
+                // Добавляем в очередь
+                lock (_lockObj)
+                {
+                    _commandQueue.Enqueue(command);
+                }
             }
+            catch (Exception ex)
+            {
+                string errorMessage = $"Ошибка добавления команды в очередь: {ex.Message}";
+                _loggingService.LogError(errorMessage, ex.StackTrace);
+                ErrorOccurred?.Invoke(this, errorMessage);
+            }
+        }
+
+        /// <summary>
+        /// Логирование отправляемой команды
+        /// </summary>
+        private void LogCommand(ERCHM30TZCommand command)
+        {
+            string details;
+
+            switch (command.CommandType)
+            {
+                case CommandType.GetParameters:
+                    details = "Запрос параметров двигателя";
+                    break;
+
+                case CommandType.SetEngineSpeed:
+                    details = $"Установка оборотов двигателя: {command.EngineSpeed:F0} об/мин";
+                    break;
+
+                case CommandType.SetRackPosition:
+                    details = $"Установка положения рейки: {command.RackPosition:F2}";
+                    break;
+
+                case CommandType.SetEngineMode:
+                    details = $"Установка режима двигателя: {command.EngineMode}";
+                    break;
+
+                case CommandType.SetLoadType:
+                    details = $"Установка типа нагрузки: {command.LoadType}";
+                    break;
+
+                case CommandType.SetEquipmentPosition:
+                    details = $"Установка позиции оборудования: {command.EquipmentPosition}";
+                    break;
+
+                case CommandType.GetProtectionStatus:
+                    details = "Запрос статуса защит";
+                    break;
+
+                case CommandType.SetProtectionThresholds:
+                    details = "Установка порогов защит";
+                    break;
+
+                case CommandType.ResetProtection:
+                    details = "Сброс защит";
+                    break;
+
+                default:
+                    details = "Неизвестная команда";
+                    break;
+            }
+
+            _loggingService.LogInfo($"Отправка команды: {command.CommandType}", details);
         }
 
         /// <summary>
@@ -195,6 +279,8 @@ namespace Regulyators.UI.Services
         {
             if (!IsConnected || _serialPort == null || !_serialPort.IsOpen)
             {
+                _loggingService.LogWarning("Попытка отправки данных при отсутствии соединения", "Запуск процедуры переподключения");
+
                 if (TryReconnect())
                 {
                     // Если переподключились успешно, пробуем отправить
@@ -218,12 +304,16 @@ namespace Regulyators.UI.Services
             }
             catch (TimeoutException)
             {
-                ErrorOccurred?.Invoke(this, "Таймаут отправки данных");
+                string errorMessage = "Таймаут отправки данных";
+                _loggingService.LogWarning(errorMessage);
+                ErrorOccurred?.Invoke(this, errorMessage);
                 return false;
             }
             catch (Exception ex)
             {
-                ErrorOccurred?.Invoke(this, $"Ошибка отправки данных: {ex.Message}");
+                string errorMessage = $"Ошибка отправки данных: {ex.Message}";
+                _loggingService.LogError(errorMessage, ex.StackTrace);
+                ErrorOccurred?.Invoke(this, errorMessage);
                 IsConnected = false;
                 return false;
             }
@@ -236,6 +326,7 @@ namespace Regulyators.UI.Services
         {
             if (!IsConnected || _serialPort == null || !_serialPort.IsOpen)
             {
+                _loggingService.LogWarning("Попытка чтения данных при отсутствии соединения");
                 return null;
             }
 
@@ -247,6 +338,7 @@ namespace Regulyators.UI.Services
                 if (bytesRead != bytesToRead)
                 {
                     // Неполное чтение
+                    _loggingService.LogWarning($"Неполное чтение данных: прочитано {bytesRead} из {bytesToRead} байт");
                     byte[] result = new byte[bytesRead];
                     Array.Copy(buffer, result, bytesRead);
                     return result;
@@ -256,12 +348,16 @@ namespace Regulyators.UI.Services
             }
             catch (TimeoutException)
             {
-                ErrorOccurred?.Invoke(this, "Таймаут чтения данных");
+                string errorMessage = "Таймаут чтения данных";
+                _loggingService.LogWarning(errorMessage);
+                ErrorOccurred?.Invoke(this, errorMessage);
                 return null;
             }
             catch (Exception ex)
             {
-                ErrorOccurred?.Invoke(this, $"Ошибка чтения данных: {ex.Message}");
+                string errorMessage = $"Ошибка чтения данных: {ex.Message}";
+                _loggingService.LogError(errorMessage, ex.StackTrace);
+                ErrorOccurred?.Invoke(this, errorMessage);
                 IsConnected = false;
                 return null;
             }
@@ -274,13 +370,25 @@ namespace Regulyators.UI.Services
         {
             try
             {
+                _loggingService.LogInfo("Попытка переподключения", $"Порт: {Settings.PortName}");
+
                 Disconnect();
                 Thread.Sleep(1000); // Пауза перед переподключением
-                return Connect();
+
+                bool result = Connect();
+
+                if (result)
+                    _loggingService.LogInfo("Переподключение успешно", $"Порт: {Settings.PortName}");
+                else
+                    _loggingService.LogError("Не удалось переподключиться", $"Порт: {Settings.PortName}");
+
+                return result;
             }
             catch (Exception ex)
             {
-                ErrorOccurred?.Invoke(this, $"Ошибка переподключения: {ex.Message}");
+                string errorMessage = $"Ошибка при попытке переподключения: {ex.Message}";
+                _loggingService.LogError(errorMessage, ex.StackTrace);
+                ErrorOccurred?.Invoke(this, errorMessage);
                 return false;
             }
         }
@@ -290,6 +398,8 @@ namespace Regulyators.UI.Services
         /// </summary>
         private async Task ProcessCommandQueue(CancellationToken cancellationToken)
         {
+            _loggingService.LogInfo("Запуск обработки очереди команд");
+
             while (!cancellationToken.IsCancellationRequested)
             {
                 ERCHM30TZCommand command = null;
@@ -305,16 +415,22 @@ namespace Regulyators.UI.Services
 
                 if (command != null)
                 {
+                    _loggingService.LogInfo($"Обработка команды из очереди: {command.CommandType}");
+
                     // Формируем пакет данных для отправки
                     byte[] packet = ComposePacket(command);
 
                     if (SendData(packet))
                     {
+                        _loggingService.LogInfo("Команда отправлена успешно", $"Тип: {command.CommandType}");
+
                         // Ждем ответа
                         await ReadResponseAsync(command);
                     }
                     else
                     {
+                        _loggingService.LogWarning("Не удалось отправить команду, возврат в очередь", $"Тип: {command.CommandType}");
+
                         // Если не удалось отправить, возвращаем команду в очередь
                         lock (_lockObj)
                         {
@@ -331,6 +447,8 @@ namespace Regulyators.UI.Services
                     await Task.Delay(100, cancellationToken);
                 }
             }
+
+            _loggingService.LogInfo("Завершение обработки очереди команд");
         }
 
         /// <summary>
@@ -338,6 +456,8 @@ namespace Regulyators.UI.Services
         /// </summary>
         private void StartMonitoring()
         {
+            _loggingService.LogInfo("Запуск мониторинга параметров двигателя", $"Интервал: {Settings.PollingInterval} мс");
+
             // Запускаем периодический опрос параметров
             Task.Run(async () =>
             {
@@ -362,11 +482,15 @@ namespace Regulyators.UI.Services
         {
             try
             {
+                _loggingService.LogInfo("Ожидание ответа на команду", $"Тип: {command.CommandType}, Задержка: {Settings.ResponseDelay} мс");
+
                 // Ждем начала ответа
                 await Task.Delay(Settings.ResponseDelay);
 
-                if (_serialPort.BytesToRead > 0)
+                if (_serialPort?.BytesToRead > 0)
                 {
+                    _loggingService.LogInfo($"Получен ответ, байт доступно: {_serialPort.BytesToRead}");
+
                     // Читаем заголовок ответа (первые 4 байта)
                     byte[] header = ReadData(4);
 
@@ -378,6 +502,8 @@ namespace Regulyators.UI.Services
                             // Определяем длину данных
                             int dataLength = header[2] | (header[3] << 8);
 
+                            _loggingService.LogInfo($"Получен заголовок ответа, длина данных: {dataLength} байт");
+
                             // Читаем данные
                             byte[] data = ReadData(dataLength);
 
@@ -386,13 +512,31 @@ namespace Regulyators.UI.Services
                                 // Обрабатываем полученные данные
                                 ProcessResponse(command, data);
                             }
+                            else
+                            {
+                                _loggingService.LogWarning("Не удалось прочитать данные ответа");
+                            }
+                        }
+                        else
+                        {
+                            _loggingService.LogWarning("Неверный маркер начала пакета", $"Получено: 0x{header[0]:X2}{header[1]:X2}, ожидалось: 0xAA55");
                         }
                     }
+                    else
+                    {
+                        _loggingService.LogWarning("Не удалось прочитать заголовок ответа");
+                    }
+                }
+                else
+                {
+                    _loggingService.LogWarning("Нет данных для чтения после ожидания ответа");
                 }
             }
             catch (Exception ex)
             {
-                ErrorOccurred?.Invoke(this, $"Ошибка чтения ответа: {ex.Message}");
+                string errorMessage = $"Ошибка чтения ответа: {ex.Message}";
+                _loggingService.LogError(errorMessage, ex.StackTrace);
+                ErrorOccurred?.Invoke(this, errorMessage);
             }
         }
 
@@ -403,6 +547,8 @@ namespace Regulyators.UI.Services
         {
             try
             {
+                _loggingService.LogInfo($"Обработка ответа на команду: {command.CommandType}, Длина данных: {data.Length} байт");
+
                 switch (command.CommandType)
                 {
                     case CommandType.GetParameters:
@@ -410,26 +556,95 @@ namespace Regulyators.UI.Services
                         var parameters = ParseEngineParameters(data);
                         if (parameters != null)
                         {
+                            _loggingService.LogInfo("Получены параметры двигателя",
+                                $"Обороты: {parameters.EngineSpeed:F0}, Давление масла: {parameters.OilPressure:F2}");
+
                             // Уведомляем подписчиков о новых данных
                             DataReceived?.Invoke(this, parameters);
                         }
                         break;
 
                     case CommandType.SetEngineSpeed:
-                        // Обработка ответа на установку оборотов
+                        _loggingService.LogInfo("Получен ответ на установку оборотов", $"Статус: {GetStatusFromResponse(data)}");
                         break;
 
                     case CommandType.SetRackPosition:
-                        // Обработка ответа на установку положения рейки
+                        _loggingService.LogInfo("Получен ответ на установку положения рейки", $"Статус: {GetStatusFromResponse(data)}");
                         break;
 
-                        // Другие команды...
+                    case CommandType.SetEngineMode:
+                        _loggingService.LogInfo("Получен ответ на установку режима двигателя", $"Статус: {GetStatusFromResponse(data)}");
+                        break;
+
+                    case CommandType.SetLoadType:
+                        _loggingService.LogInfo("Получен ответ на установку типа нагрузки", $"Статус: {GetStatusFromResponse(data)}");
+                        break;
+
+                    case CommandType.SetEquipmentPosition:
+                        _loggingService.LogInfo("Получен ответ на установку позиции оборудования", $"Статус: {GetStatusFromResponse(data)}");
+                        break;
+
+                    case CommandType.GetProtectionStatus:
+                        _loggingService.LogInfo("Получен ответ на запрос статуса защит", $"Длина данных: {data.Length} байт");
+                        ParseProtectionStatus(data);
+                        break;
+
+                    case CommandType.SetProtectionThresholds:
+                        _loggingService.LogInfo("Получен ответ на установку порогов защит", $"Статус: {GetStatusFromResponse(data)}");
+                        break;
+
+                    case CommandType.ResetProtection:
+                        _loggingService.LogInfo("Получен ответ на сброс защит", $"Статус: {GetStatusFromResponse(data)}");
+                        break;
+
+                    default:
+                        _loggingService.LogWarning($"Получен ответ на неизвестную команду: {command.CommandType}");
+                        break;
                 }
             }
             catch (Exception ex)
             {
-                ErrorOccurred?.Invoke(this, $"Ошибка обработки ответа: {ex.Message}");
+                string errorMessage = $"Ошибка обработки ответа: {ex.Message}";
+                _loggingService.LogError(errorMessage, ex.StackTrace);
+                ErrorOccurred?.Invoke(this, errorMessage);
             }
+        }
+
+        /// <summary>
+        /// Получение статуса из ответа
+        /// </summary>
+        private string GetStatusFromResponse(byte[] data)
+        {
+            if (data == null || data.Length < 1)
+                return "Неизвестно";
+
+            return data[0] == 0x00 ? "Успешно" : $"Ошибка: 0x{data[0]:X2}";
+        }
+
+        /// <summary>
+        /// Разбор статуса защит из ответа
+        /// </summary>
+        private void ParseProtectionStatus(byte[] data)
+        {
+            if (data == null || data.Length < 4)
+            {
+                _loggingService.LogWarning("Недостаточно данных для разбора статуса защит");
+                return;
+            }
+
+            // Пример разбора статуса защит (зависит от протокола)
+            bool isOilPressureActive = (data[0] & 0x01) != 0;
+            bool isEngineSpeedActive = (data[0] & 0x02) != 0;
+            bool isBoostPressureActive = (data[0] & 0x04) != 0;
+            bool isOilTemperatureActive = (data[0] & 0x08) != 0;
+
+            _loggingService.LogInfo("Статус защит:",
+                $"Давление масла: {(isOilPressureActive ? "АКТИВНА" : "Норма")}, " +
+                $"Обороты: {(isEngineSpeedActive ? "АКТИВНА" : "Норма")}, " +
+                $"Давление наддува: {(isBoostPressureActive ? "АКТИВНА" : "Норма")}, " +
+                $"Температура масла: {(isOilTemperatureActive ? "АКТИВНА" : "Норма")}");
+
+            // Здесь можно было бы вызвать события для оповещения о статусе защит
         }
 
         /// <summary>
@@ -438,7 +653,8 @@ namespace Regulyators.UI.Services
         private byte[] ComposePacket(ERCHM30TZCommand command)
         {
             // Реализация формирования пакета по протоколу ЭРЧМ30ТЗ
-            // Это упрощенная демонстрационная реализация
+            // Это упрощенная демонстрационная реализация, которая должна быть заменена
+            // на реальный протокол ЭРЧМ30ТЗ
 
             List<byte> packet = new List<byte>();
 
@@ -471,7 +687,51 @@ namespace Regulyators.UI.Services
                     dataLength = data.Length;
                     break;
 
-                    // Другие команды...
+                case CommandType.SetEngineMode:
+                    // Преобразуем режим в байт
+                    data = new byte[] { (byte)command.EngineMode };
+                    dataLength = data.Length;
+                    break;
+
+                case CommandType.SetLoadType:
+                    // Преобразуем тип нагрузки в байт
+                    data = new byte[] { (byte)command.LoadType };
+                    dataLength = data.Length;
+                    break;
+
+                case CommandType.SetEquipmentPosition:
+                    // Преобразуем позицию оборудования в байты
+                    data = BitConverter.GetBytes((ushort)command.EquipmentPosition);
+                    dataLength = data.Length;
+                    break;
+
+                case CommandType.GetProtectionStatus:
+                    // Для запроса статуса защит данных нет
+                    break;
+
+                case CommandType.SetProtectionThresholds:
+                    // Преобразуем пороги защит в байты
+                    List<byte> thresholdBytes = new List<byte>();
+
+                    // Добавляем минимальное давление масла (2 байта, умноженное на 100 для сохранения 2 знаков после запятой)
+                    thresholdBytes.AddRange(BitConverter.GetBytes((ushort)(command.Thresholds.OilPressureMinThreshold * 100)));
+
+                    // Добавляем максимальные обороты двигателя (2 байта)
+                    thresholdBytes.AddRange(BitConverter.GetBytes((ushort)command.Thresholds.EngineSpeedMaxThreshold));
+
+                    // Добавляем максимальное давление наддува (2 байта, умноженное на 100)
+                    thresholdBytes.AddRange(BitConverter.GetBytes((ushort)(command.Thresholds.BoostPressureMaxThreshold * 100)));
+
+                    // Добавляем максимальную температуру масла (2 байта, умноженное на 10)
+                    thresholdBytes.AddRange(BitConverter.GetBytes((ushort)(command.Thresholds.OilTemperatureMaxThreshold * 10)));
+
+                    data = thresholdBytes.ToArray();
+                    dataLength = data.Length;
+                    break;
+
+                case CommandType.ResetProtection:
+                    // Для сброса защит данных нет
+                    break;
             }
 
             // Добавляем длину данных
@@ -484,13 +744,15 @@ namespace Regulyators.UI.Services
                 packet.AddRange(data);
             }
 
-            // Контрольная сумма (простая сумма всех байтов)
+            // Контрольная сумма (XOR всех байтов)
             byte checksum = 0;
             for (int i = 0; i < packet.Count; i++)
             {
-                checksum += packet[i];
+                checksum ^= packet[i];
             }
             packet.Add(checksum);
+
+            _loggingService.LogInfo($"Сформирован пакет данных для команды {command.CommandType}, длина: {packet.Count} байт");
 
             return packet.ToArray();
         }
@@ -500,9 +762,9 @@ namespace Regulyators.UI.Services
         /// </summary>
         private EngineParameters ParseEngineParameters(byte[] data)
         {
-            // Это демонстрационная реализация разбора данных
-            if (data.Length < 12) // Минимальная длина ответа с параметрами
+            if (data == null || data.Length < 12) // Минимальная длина ответа с параметрами
             {
+                _loggingService.LogWarning("Недостаточно данных для разбора параметров двигателя", $"Получено байт: {data?.Length ?? 0}, требуется: 12");
                 return null;
             }
 
@@ -512,7 +774,7 @@ namespace Regulyators.UI.Services
                 {
                     EngineSpeed = BitConverter.ToUInt16(data, 0),
                     TurboCompressorSpeed = BitConverter.ToUInt16(data, 2),
-                    OilPressure = BitConverter.ToUInt16(data, 4) / 100.0,
+                    OilPressure = BitConverter.ToUInt16(data, 4) / 100.0, // Пример: 250 = 2.5 кг/см²
                     BoostPressure = BitConverter.ToUInt16(data, 6) / 100.0,
                     OilTemperature = BitConverter.ToUInt16(data, 8),
                     RackPosition = BitConverter.ToUInt16(data, 10),
@@ -523,7 +785,9 @@ namespace Regulyators.UI.Services
             }
             catch (Exception ex)
             {
-                ErrorOccurred?.Invoke(this, $"Ошибка разбора параметров: {ex.Message}");
+                string errorMessage = $"Ошибка разбора параметров: {ex.Message}";
+                _loggingService.LogError(errorMessage, ex.StackTrace);
+                ErrorOccurred?.Invoke(this, errorMessage);
                 return null;
             }
         }

@@ -1,0 +1,167 @@
+﻿<UserControl 
+    x:Class="Regulyators.UI.Views.GaugePanelView"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006" 
+    xmlns:d="http://schemas.microsoft.com/expression/blend/2008" 
+    xmlns:local="clr-namespace:Regulyators.UI.Views"
+    xmlns:controls="clr-namespace:Regulyators.UI.Controls"
+    mc:Ignorable="d" 
+    d:DesignHeight="600" d:DesignWidth="800">
+
+    <Grid Margin="16">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+
+        <!-- Заголовок -->
+        <TextBlock 
+            Grid.Row="0"
+            Text="Аналоговые индикаторы параметров" 
+            FontSize="18" 
+            FontWeight="Bold" 
+            Margin="0,0,0,16"/>
+
+        <!-- Панель индикаторов -->
+        <Border 
+            Grid.Row="1"
+            BorderBrush="#CCCCCC" 
+            BorderThickness="1" 
+            Padding="16"
+            Background="#F5F5F5"
+            CornerRadius="4">
+
+            <Grid>
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="*"/>
+                    <RowDefinition Height="*"/>
+                </Grid.RowDefinitions>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="*"/>
+                </Grid.ColumnDefinitions>
+
+                <!-- Обороты двигателя -->
+                <controls:GaugeControl 
+                    Grid.Row="0" 
+                    Grid.Column="0"
+                    Title="Обороты двигателя"
+                    UnitLabel="об/мин"
+                    Minimum="0"
+                    Maximum="2500"
+                    CriticalMaxValue="2200"
+                    Value="{Binding EngineParameters.EngineSpeed}"
+                    NeedleBrush="Red"/>
+
+                <!-- Давление масла -->
+                <controls:GaugeControl 
+                    Grid.Row="0" 
+                    Grid.Column="1"
+                    Title="Давление масла"
+                    UnitLabel="кг/см²"
+                    Minimum="0"
+                    Maximum="5"
+                    CriticalMinValue="1.5"
+                    Value="{Binding EngineParameters.OilPressure}"
+                    NeedleBrush="Blue"/>
+
+                <!-- Давление наддува -->
+                <controls:GaugeControl 
+                    Grid.Row="0" 
+                    Grid.Column="2"
+                    Title="Давление наддува"
+                    UnitLabel="кг/см²"
+                    Minimum="0"
+                    Maximum="4"
+                    CriticalMaxValue="2.5"
+                    Value="{Binding EngineParameters.BoostPressure}"
+                    NeedleBrush="Green"/>
+
+                <!-- Температура масла -->
+                <controls:GaugeControl 
+                    Grid.Row="1" 
+                    Grid.Column="0"
+                    Title="Температура масла"
+                    UnitLabel="°C"
+                    Minimum="0"
+                    Maximum="150"
+                    CriticalMaxValue="110"
+                    Value="{Binding EngineParameters.OilTemperature}"
+                    NeedleBrush="Orange"/>
+
+                <!-- Обороты турбокомпрессора -->
+                <controls:GaugeControl 
+                    Grid.Row="1" 
+                    Grid.Column="1"
+                    Title="Обороты турбокомпрессора"
+                    UnitLabel="об/мин"
+                    Minimum="0"
+                    Maximum="25000"
+                    MajorTickCount="5"
+                    Value="{Binding EngineParameters.TurboCompressorSpeed}"
+                    NeedleBrush="Purple"/>
+
+                <!-- Положение рейки -->
+                <controls:GaugeControl 
+                    Grid.Row="1" 
+                    Grid.Column="2"
+                    Title="Положение рейки"
+                    UnitLabel="код"
+                    Minimum="0"
+                    Maximum="30"
+                    Value="{Binding EngineParameters.RackPosition}"
+                    NeedleBrush="Magenta"/>
+            </Grid>
+        </Border>
+
+        <!-- Настройки отображения -->
+        <Border 
+            Grid.Row="2"
+            BorderBrush="#CCCCCC" 
+            BorderThickness="1" 
+            Padding="16"
+            Background="#F5F5F5"
+            CornerRadius="4"
+            Margin="0,16,0,0">
+
+            <StackPanel>
+                <TextBlock 
+                    Text="Настройки отображения" 
+                    FontSize="14" 
+                    FontWeight="SemiBold" 
+                    Margin="0,0,0,8"/>
+
+                <!-- Переключатель режимов обновления -->
+                <StackPanel Orientation="Horizontal" Margin="0,8">
+                    <TextBlock 
+                        Text="Частота обновления:" 
+                        VerticalAlignment="Center"
+                        Margin="0,0,16,0"/>
+
+                    <ComboBox 
+                        Width="150"
+                        SelectedItem="{Binding SelectedUpdateInterval}">
+                        <ComboBoxItem Content="Высокая (100 мс)"/>
+                        <ComboBoxItem Content="Средняя (500 мс)"/>
+                        <ComboBoxItem Content="Низкая (1000 мс)"/>
+                    </ComboBox>
+                </StackPanel>
+
+                <!-- Кнопки управления -->
+                <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,8,0,0">
+                    <Button 
+                        Content="Сохранить снимок" 
+                        Command="{Binding SaveSnapshotCommand}"
+                        Margin="0,0,8,0"/>
+
+                    <Button 
+                        Content="Обновить"
+                        Command="{Binding RefreshGaugesCommand}"/>
+                </StackPanel>
+            </StackPanel>
+        </Border>
+    </Grid>
+</UserControl>

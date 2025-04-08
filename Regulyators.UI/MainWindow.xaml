@@ -8,7 +8,7 @@
     xmlns:viewmodels="clr-namespace:Regulyators.UI.ViewModels"
     mc:Ignorable="d"
     Title="Система испытаний регуляторов ЭРЧМ30ТЗ" 
-    Height="720" 
+    Height="800" 
     Width="1100"
     WindowStartupLocation="CenterScreen">
 

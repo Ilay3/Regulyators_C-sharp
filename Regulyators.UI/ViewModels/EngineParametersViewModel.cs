@@ -16,15 +16,16 @@ namespace Regulyators.UI.ViewModels
     /// </summary>
     public class EngineParametersViewModel : ViewModelBase
     {
-        private readonly Timer _updateTimer;
-        private readonly Random _random;
-        private readonly GraphService _graphService;
         private readonly LoggingService _loggingService;
+        private readonly GraphService _graphService;
+        private readonly ComPortService _comPortService;
+        private readonly SettingsService _settingsService;
 
         private EngineParameters _engineParameters;
         private WpfPlot _parametersPlot;
         private double _elapsedTime = 0;
         private bool _isGraphInitialized = false;
+        private bool _isConnected = false;
 
         // Параметры отображения
         private bool _showEngineSpeed = true;
@@ -33,6 +34,7 @@ namespace Regulyators.UI.ViewModels
         private bool _showBoostPressure = false;
         private bool _showOilTemperature = true;
         private string _selectedTimeInterval = "30";
+        private string _statusMessage;
 
         #region Свойства
 
@@ -178,6 +180,15 @@ namespace Regulyators.UI.ViewModels
         }
 
         /// <summary>
+        /// Статусное сообщение
+        /// </summary>
+        public string StatusMessage
+        {
+            get => _statusMessage;
+            set => SetProperty(ref _statusMessage, value);
+        }
+
+        /// <summary>
         /// Доступные интервалы времени для графика (секунды)
         /// </summary>
         public List<string> TimeIntervals { get; } = new List<string> { "10", "30", "60", "120", "300" };
@@ -196,6 +207,11 @@ namespace Regulyators.UI.ViewModels
         /// </summary>
         public ICommand ExportGraphCommand { get; }
 
+        /// <summary>
+        /// Команда обновления данных
+        /// </summary>
+        public ICommand RefreshDataCommand { get; }
+
         #endregion
 
         /// <summary>
@@ -203,9 +219,10 @@ namespace Regulyators.UI.ViewModels
         /// </summary>
         public EngineParametersViewModel()
         {
-            _random = new Random();
-            _graphService = GraphService.Instance;
             _loggingService = LoggingService.Instance;
+            _graphService = GraphService.Instance;
+            _comPortService = ComPortService.Instance;
+            _settingsService = SettingsService.Instance;
 
             // Инициализация серий данных для графика
             _graphService.InitSeries("Обороты двигателя", 600);
@@ -217,18 +234,25 @@ namespace Regulyators.UI.ViewModels
             // Инициализация параметров двигателя
             EngineParameters = new EngineParameters
             {
-                EngineSpeed = 800,
-                TurboCompressorSpeed = 5000,
-                OilPressure = 2.5,
-                BoostPressure = 1.2,
-                OilTemperature = 75,
-                RackPosition = 10,
+                EngineSpeed = 0,
+                TurboCompressorSpeed = 0,
+                OilPressure = 0,
+                BoostPressure = 0,
+                OilTemperature = 0,
+                RackPosition = 0,
                 Timestamp = DateTime.Now
             };
 
             // Инициализация команд
             ClearGraphCommand = new RelayCommand(ClearGraph);
             ExportGraphCommand = new RelayCommand(ExportGraph);
+            RefreshDataCommand = new RelayCommand(RefreshData);
+
+            // Установка порогов срабатывания
+            EngineParameters.OilPressureCriticalThreshold = _settingsService.ProtectionThresholds.OilPressureMinThreshold;
+            EngineParameters.EngineSpeedCriticalThreshold = _settingsService.ProtectionThresholds.EngineSpeedMaxThreshold;
+            EngineParameters.BoostPressureCriticalThreshold = _settingsService.ProtectionThresholds.BoostPressureMaxThreshold;
+            EngineParameters.OilTemperatureCriticalThreshold = _settingsService.ProtectionThresholds.OilTemperatureMaxThreshold;
 
             // Подписка на события изменения свойств модели
             EngineParameters.PropertyChanged += (sender, args) =>
@@ -253,8 +277,25 @@ namespace Regulyators.UI.ViewModels
                 }
             };
 
-            // Запуск таймера обновления данных
-            _updateTimer = new Timer(UpdateParameters, null, 500, 500);
+            // Подписка на события COM-порта
+            _comPortService.DataReceived += OnDataReceived;
+            _comPortService.ConnectionStatusChanged += OnConnectionStatusChanged;
+            _comPortService.ErrorOccurred += OnErrorOccurred;
+
+            // Подписка на события изменения настроек
+            _settingsService.SettingsChanged += OnSettingsChanged;
+
+            // Проверка соединения
+            _isConnected = _comPortService.IsConnected;
+            if (_isConnected)
+            {
+                StatusMessage = "Подключено к оборудованию";
+                RefreshData();
+            }
+            else
+            {
+                StatusMessage = "Нет подключения к оборудованию";
+            }
 
             // Логирование
             _loggingService.LogInfo("Запущен мониторинг параметров двигателя");
@@ -290,54 +331,121 @@ namespace Regulyators.UI.ViewModels
         }
 
         /// <summary>
-        /// Метод обновления параметров (демо-режим)
+        /// Обработчик события получения данных от COM-порта
         /// </summary>
-        private void UpdateParameters(object state)
+        private void OnDataReceived(object sender, EngineParameters parameters)
         {
-            // Генерация случайных данных для демонстрации
-            double engineSpeed = 800 + _random.Next(0, 1600);
-            double turboSpeed = 5000 + _random.Next(0, 15000);
-            double oilPressure = 1.2 + _random.NextDouble() * 1.8;
-            double boostPressure = 0.8 + _random.NextDouble() * 2.0;
-            double oilTemperature = 70 + _random.Next(0, 50);
-            int rackPosition = _random.Next(0, 30);
-
-            // Иногда генерируем критические значения
-            if (_random.Next(100) < 5)
+            try
             {
-                if (_random.Next(4) == 0)
-                    oilPressure = 0.8 + _random.NextDouble() * 0.6; // Низкое давление масла
-                else if (_random.Next(4) == 1)
-                    engineSpeed = 2300 + _random.Next(0, 300); // Высокие обороты
-                else if (_random.Next(4) == 2)
-                    boostPressure = 2.8 + _random.NextDouble() * 0.8; // Высокое давление наддува
-                else
-                    oilTemperature = 115 + _random.Next(0, 15); // Высокая температура масла
-            }
+                Application.Current.Dispatcher.Invoke(() =>
+                {
+                    // Обновляем значения параметров
+                    EngineParameters.EngineSpeed = parameters.EngineSpeed;
+                    EngineParameters.TurboCompressorSpeed = parameters.TurboCompressorSpeed;
+                    EngineParameters.OilPressure = parameters.OilPressure;
+                    EngineParameters.BoostPressure = parameters.BoostPressure;
+                    EngineParameters.OilTemperature = parameters.OilTemperature;
+                    EngineParameters.RackPosition = parameters.RackPosition;
+                    EngineParameters.Timestamp = parameters.Timestamp;
 
-            // Обновление графика
+                    // Добавляем данные на график
+                    AddDataToGraph();
+
+                    // Обновляем статус
+                    StatusMessage = $"Данные обновлены: {parameters.Timestamp:HH:mm:ss}";
+                });
+            }
+            catch (Exception ex)
+            {
+                _loggingService.LogError("Ошибка обработки полученных данных", ex.Message);
+            }
+        }
+
+        /// <summary>
+        /// Обработчик события изменения статуса подключения
+        /// </summary>
+        private void OnConnectionStatusChanged(object sender, bool isConnected)
+        {
+            try
+            {
+                Application.Current.Dispatcher.Invoke(() =>
+                {
+                    _isConnected = isConnected;
+                    StatusMessage = isConnected ? "Подключено к оборудованию" : "Нет подключения к оборудованию";
+
+                    // Если подключились, запрашиваем данные
+                    if (isConnected)
+                    {
+                        RefreshData();
+                    }
+                });
+            }
+            catch (Exception ex)
+            {
+                _loggingService.LogError("Ошибка обработки изменения статуса подключения", ex.Message);
+            }
+        }
+
+        /// <summary>
+        /// Обработчик события ошибки COM-порта
+        /// </summary>
+        private void OnErrorOccurred(object sender, string errorMessage)
+        {
+            try
+            {
+                Application.Current.Dispatcher.Invoke(() =>
+                {
+                    StatusMessage = $"Ошибка: {errorMessage}";
+                });
+            }
+            catch (Exception ex)
+            {
+                _loggingService.LogError("Ошибка обработки события ошибки COM-порта", ex.Message);
+            }
+        }
+
+        /// <summary>
+        /// Обработчик события изменения настроек
+        /// </summary>
+        private void OnSettingsChanged(object sender, SettingsChangedEventArgs e)
+        {
+            try
+            {
+                if (e.SettingsType == SettingsType.Protection || e.SettingsType == SettingsType.All)
+                {
+                    Application.Current.Dispatcher.Invoke(() =>
+                    {
+                        // Обновляем пороги срабатывания защит
+                        EngineParameters.OilPressureCriticalThreshold = _settingsService.ProtectionThresholds.OilPressureMinThreshold;
+                        EngineParameters.EngineSpeedCriticalThreshold = _settingsService.ProtectionThresholds.EngineSpeedMaxThreshold;
+                        EngineParameters.BoostPressureCriticalThreshold = _settingsService.ProtectionThresholds.BoostPressureMaxThreshold;
+                        EngineParameters.OilTemperatureCriticalThreshold = _settingsService.ProtectionThresholds.OilTemperatureMaxThreshold;
+
+                        StatusMessage = "Пороговые значения защит обновлены";
+                    });
+                }
+            }
+            catch (Exception ex)
+            {
+                _loggingService.LogError("Ошибка обработки изменения настроек", ex.Message);
+            }
+        }
+
+        /// <summary>
+        /// Добавление данных на график
+        /// </summary>
+        private void AddDataToGraph()
+        {
             _elapsedTime += 0.5; // Прирост 0.5 сек
 
-            _graphService.AddDataPoint("Обороты двигателя", _elapsedTime, engineSpeed);
-            _graphService.AddDataPoint("Обороты турбокомпрессора", _elapsedTime, turboSpeed);
-            _graphService.AddDataPoint("Давление масла", _elapsedTime, oilPressure);
-            _graphService.AddDataPoint("Давление наддува", _elapsedTime, boostPressure);
-            _graphService.AddDataPoint("Температура масла", _elapsedTime, oilTemperature);
+            _graphService.AddDataPoint("Обороты двигателя", _elapsedTime, EngineParameters.EngineSpeed);
+            _graphService.AddDataPoint("Обороты турбокомпрессора", _elapsedTime, EngineParameters.TurboCompressorSpeed);
+            _graphService.AddDataPoint("Давление масла", _elapsedTime, EngineParameters.OilPressure);
+            _graphService.AddDataPoint("Давление наддува", _elapsedTime, EngineParameters.BoostPressure);
+            _graphService.AddDataPoint("Температура масла", _elapsedTime, EngineParameters.OilTemperature);
 
-            // Обновление данных в UI потоке
-            Application.Current.Dispatcher.Invoke(() =>
-            {
-                EngineParameters.EngineSpeed = engineSpeed;
-                EngineParameters.TurboCompressorSpeed = turboSpeed;
-                EngineParameters.OilPressure = oilPressure;
-                EngineParameters.BoostPressure = boostPressure;
-                EngineParameters.OilTemperature = oilTemperature;
-                EngineParameters.RackPosition = rackPosition;
-                EngineParameters.Timestamp = DateTime.Now;
-
-                // Обновление графика
-                UpdateGraph();
-            });
+            // Обновляем график
+            UpdateGraph();
         }
 
         /// <summary>
@@ -351,6 +459,7 @@ namespace Regulyators.UI.ViewModels
 
             // Логирование
             _loggingService.LogInfo("График параметров очищен");
+            StatusMessage = "График очищен";
         }
 
         /// <summary>
@@ -376,16 +485,19 @@ namespace Regulyators.UI.ViewModels
                         // Сохраняем график в файл
                         _parametersPlot.Plot.SaveFig(dialog.FileName);
                         _loggingService.LogInfo($"График сохранен в файл", dialog.FileName);
+                        StatusMessage = "График сохранен в файл";
                     }
                 }
                 catch (Exception ex)
                 {
                     _loggingService.LogError("Ошибка при экспорте графика", ex.Message);
+                    StatusMessage = "Ошибка при экспорте графика";
                 }
             }
             else
             {
                 _loggingService.LogWarning("Экспорт графика невозможен", "График не инициализирован");
+                StatusMessage = "Экспорт графика невозможен: график не инициализирован";
             }
         }
 
@@ -431,6 +543,28 @@ namespace Regulyators.UI.ViewModels
 
                 _parametersPlot.Plot.SetAxisLimitsX(minX, maxX);
                 _parametersPlot.Refresh();
+            }
+        }
+
+        /// <summary>
+        /// Запрос обновления данных
+        /// </summary>
+        private void RefreshData()
+        {
+            if (_isConnected)
+            {
+                // Отправляем команду запроса параметров
+                _comPortService.SendCommand(new ERCHM30TZCommand
+                {
+                    CommandType = CommandType.GetParameters
+                });
+
+                StatusMessage = "Запрос данных отправлен";
+            }
+            else
+            {
+                StatusMessage = "Невозможно получить данные: нет подключения";
+                _loggingService.LogWarning("Попытка запроса данных при отсутствии подключения");
             }
         }
 

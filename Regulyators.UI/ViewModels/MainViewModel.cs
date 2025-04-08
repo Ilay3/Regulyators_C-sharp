@@ -117,9 +117,12 @@ namespace Regulyators.UI.ViewModels
             var controlViewModel = new EngineControlViewModel();
             var loggingViewModel = new LoggingViewModel();
 
-            // Новые модели представления для защит и настроек
+            // Модели представления для защит и настроек
             var protectionViewModel = new ProtectionSystemViewModel();
             var settingsViewModel = new SettingsViewModel();
+
+            // Новая модель представления для аналоговых индикаторов
+            var gaugePanelViewModel = new GaugePanelViewModel();
 
             // Инициализация меню
             MenuItems = new ObservableCollection<MenuItem>
@@ -128,6 +131,11 @@ namespace Regulyators.UI.ViewModels
                 {
                     Title = "Параметры двигателя",
                     ViewModel = engineParamsViewModel
+                },
+                new MenuItem
+                {
+                    Title = "Аналоговые индикаторы",
+                    ViewModel = gaugePanelViewModel
                 },
                 new MenuItem
                 {

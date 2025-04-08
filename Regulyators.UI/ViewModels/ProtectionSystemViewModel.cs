@@ -1,6 +1,6 @@
 ﻿using System;
 using System.Collections.ObjectModel;
-using System.Timers;
+using System.Windows;
 using System.Windows.Input;
 using System.Windows.Media;
 using Regulyators.UI.Common;
@@ -16,8 +16,7 @@ namespace Regulyators.UI.ViewModels
     {
         private readonly ComPortService _comPortService;
         private readonly LoggingService _loggingService;
-        private readonly Timer _updateTimer;
-        private readonly Random _random; // для демо-режима
+        private readonly SettingsService _settingsService;
 
         private bool _isOilPressureProtectionActive;
         private bool _isEngineSpeedProtectionActive;
@@ -40,7 +39,6 @@ namespace Regulyators.UI.ViewModels
         private string _statusMessage;
         private bool _allProtectionsEnabled;
         private bool _canResetProtection;
-        private bool _isDemoMode;
         private bool _isConnected;
 
         // Журнал событий защиты
@@ -322,15 +320,6 @@ namespace Regulyators.UI.ViewModels
         }
 
         /// <summary>
-        /// Режим демонстрации (без подключения к оборудованию)
-        /// </summary>
-        public bool IsDemoMode
-        {
-            get => _isDemoMode;
-            set => SetProperty(ref _isDemoMode, value);
-        }
-
-        /// <summary>
         /// Установлено ли соединение с оборудованием
         /// </summary>
         public bool IsConnected
@@ -368,11 +357,6 @@ namespace Regulyators.UI.ViewModels
         /// </summary>
         public ICommand RefreshCommand { get; }
 
-        /// <summary>
-        /// Команда включения/выключения демо-режима
-        /// </summary>
-        public ICommand ToggleDemoModeCommand { get; }
-
         #endregion
 
         /// <summary>
@@ -382,10 +366,10 @@ namespace Regulyators.UI.ViewModels
         {
             _comPortService = ComPortService.Instance;
             _loggingService = LoggingService.Instance;
-            _random = new Random();
+            _settingsService = SettingsService.Instance;
 
             // Инициализация порогов защит
-            _thresholds = new ProtectionThresholds();
+            _thresholds = _settingsService.ProtectionThresholds;
 
             // Инициализация журнала событий
             _protectionEvents = new ObservableCollection<ProtectionEvent>();
@@ -406,28 +390,30 @@ namespace Regulyators.UI.ViewModels
 
             AllProtectionsEnabled = true;
             CanResetProtection = false;
-            IsDemoMode = true; // Начинаем в демо-режиме
-            IsConnected = false;
+            IsConnected = _comPortService.IsConnected;
 
             // Инициализация команд
             ResetProtectionCommand = new RelayCommand(ResetProtection, () => CanResetProtection);
             ToggleAllProtectionsCommand = new RelayCommand(ToggleAllProtections);
             ClearEventsCommand = new RelayCommand(ClearEvents);
             RefreshCommand = new RelayCommand(RefreshValues);
-            ToggleDemoModeCommand = new RelayCommand(ToggleDemoMode);
 
             // Подписка на события COM-порта
             _comPortService.DataReceived += OnDataReceived;
             _comPortService.ConnectionStatusChanged += OnConnectionStatusChanged;
             _comPortService.ErrorOccurred += OnErrorOccurred;
 
-            // Запуск таймера обновления данных
-            _updateTimer = new Timer(500); // 500 мс
-            _updateTimer.Elapsed += OnUpdateTimerElapsed;
-            _updateTimer.Start();
+            // Подписка на события изменения настроек
+            _settingsService.SettingsChanged += OnSettingsChanged;
 
             // Логирование
             _loggingService.LogInfo("Система защит инициализирована");
+
+            // Запрос текущих параметров, если есть соединение
+            if (IsConnected)
+            {
+                RefreshValues();
+            }
         }
 
         /// <summary>
@@ -496,13 +482,16 @@ namespace Regulyators.UI.ViewModels
         private void OnDataReceived(object sender, EngineParameters parameters)
         {
             // Обновляем значения параметров
-            OilPressureCurrent = parameters.OilPressure;
-            EngineSpeedCurrent = parameters.EngineSpeed;
-            BoostPressureCurrent = parameters.BoostPressure;
-            OilTemperatureCurrent = parameters.OilTemperature;
+            Application.Current.Dispatcher.Invoke(() =>
+            {
+                OilPressureCurrent = parameters.OilPressure;
+                EngineSpeedCurrent = parameters.EngineSpeed;
+                BoostPressureCurrent = parameters.BoostPressure;
+                OilTemperatureCurrent = parameters.OilTemperature;
 
-            LastUpdateTime = parameters.Timestamp;
-            StatusMessage = "Данные обновлены";
+                LastUpdateTime = parameters.Timestamp;
+                StatusMessage = "Данные обновлены";
+            });
         }
 
         /// <summary>
@@ -510,14 +499,17 @@ namespace Regulyators.UI.ViewModels
         /// </summary>
         private void OnConnectionStatusChanged(object sender, bool isConnected)
         {
-            IsConnected = isConnected;
-            StatusMessage = isConnected ? "Подключено к оборудованию" : "Нет подключения";
-
-            // Если подключение потеряно, но не в демо-режиме, то переходим в демо-режим
-            if (!isConnected && !IsDemoMode)
+            Application.Current.Dispatcher.Invoke(() =>
             {
-                IsDemoMode = true;
-            }
+                IsConnected = isConnected;
+                StatusMessage = isConnected ? "Подключено к оборудованию" : "Нет подключения";
+
+                if (isConnected)
+                {
+                    // Запрашиваем текущие параметры
+                    RefreshValues();
+                }
+            });
         }
 
         /// <summary>
@@ -525,62 +517,33 @@ namespace Regulyators.UI.ViewModels
         /// </summary>
         private void OnErrorOccurred(object sender, string errorMessage)
         {
-            StatusMessage = $"Ошибка: {errorMessage}";
-            _loggingService.LogError("Ошибка COM-порта", errorMessage);
+            Application.Current.Dispatcher.Invoke(() =>
+            {
+                StatusMessage = $"Ошибка: {errorMessage}";
+            });
         }
 
         /// <summary>
-        /// Обработчик таймера обновления данных
+        /// Обработчик события изменения настроек
         /// </summary>
-        private void OnUpdateTimerElapsed(object sender, ElapsedEventArgs e)
+        private void OnSettingsChanged(object sender, SettingsChangedEventArgs e)
         {
-            // В демо-режиме генерируем случайные значения
-            if (IsDemoMode)
+            if (e.SettingsType == SettingsType.Protection || e.SettingsType == SettingsType.All)
             {
-                System.Windows.Application.Current.Dispatcher.Invoke(() =>
+                Application.Current.Dispatcher.Invoke(() =>
                 {
-                    GenerateDemoValues();
-                    LastUpdateTime = DateTime.Now;
+                    // Обновляем пороги защит
+                    Thresholds = _settingsService.ProtectionThresholds;
+
+                    // Проверяем все защиты с новыми порогами
+                    CheckOilPressureProtection();
+                    CheckEngineSpeedProtection();
+                    CheckBoostPressureProtection();
+                    CheckOilTemperatureProtection();
+
+                    StatusMessage = "Пороги защит обновлены";
                 });
             }
-        }
-
-        /// <summary>
-        /// Генерация демонстрационных значений
-        /// </summary>
-        private void GenerateDemoValues()
-        {
-            // Генерируем случайные значения
-            double oilPressure = 1.5 + _random.NextDouble() * 1.5; // от 1.5 до 3.0
-            double engineSpeed = 1000 + _random.Next(0, 1500); // от 1000 до 2500
-            double boostPressure = 1.0 + _random.NextDouble() * 2.0; // от 1.0 до 3.0
-            double oilTemperature = 70 + _random.Next(0, 50); // от 70 до 120
-
-            // Иногда генерируем критические значения для демонстрации
-            if (_random.Next(20) == 0) // 5% вероятность
-            {
-                switch (_random.Next(4))
-                {
-                    case 0:
-                        oilPressure = 0.5 + _random.NextDouble() * 0.9; // критически низкое давление масла
-                        break;
-                    case 1:
-                        engineSpeed = 2250 + _random.Next(0, 300); // критически высокие обороты
-                        break;
-                    case 2:
-                        boostPressure = 2.6 + _random.NextDouble() * 0.7; // критически высокое давление наддува
-                        break;
-                    case 3:
-                        oilTemperature = 115 + _random.Next(0, 20); // критически высокая температура масла
-                        break;
-                }
-            }
-
-            // Обновляем значения
-            OilPressureCurrent = oilPressure;
-            EngineSpeedCurrent = engineSpeed;
-            BoostPressureCurrent = boostPressure;
-            OilTemperatureCurrent = oilTemperature;
         }
 
         /// <summary>
@@ -588,24 +551,29 @@ namespace Regulyators.UI.ViewModels
         /// </summary>
         private void ResetProtection()
         {
-            // Сбрасываем все активные защиты
-            IsOilPressureProtectionActive = false;
-            IsEngineSpeedProtectionActive = false;
-            IsBoostPressureProtectionActive = false;
-            IsOilTemperatureProtectionActive = false;
-
-            // В реальном приложении отправляем команду на сброс защит
-            if (!IsDemoMode && IsConnected)
+            // Отправляем команду сброса защит через COM-порт
+            if (IsConnected)
             {
                 _comPortService.SendCommand(new ERCHM30TZCommand
                 {
                     CommandType = CommandType.ResetProtection
                 });
-            }
 
-            LogProtectionEvent("Система защит", "Сброс защит", "Сброс всех активных защит");
-            _loggingService.LogInfo("Сброс защит");
-            StatusMessage = "Защиты сброшены";
+                // Сбрасываем состояние защит в UI
+                IsOilPressureProtectionActive = false;
+                IsEngineSpeedProtectionActive = false;
+                IsBoostPressureProtectionActive = false;
+                IsOilTemperatureProtectionActive = false;
+
+                LogProtectionEvent("Система защит", "Сброс защит", "Сброс всех активных защит");
+                _loggingService.LogInfo("Выполнен сброс защит");
+                StatusMessage = "Защиты сброшены";
+            }
+            else
+            {
+                StatusMessage = "Невозможно сбросить защиты: нет соединения";
+                _loggingService.LogWarning("Попытка сброса защит при отсутствии соединения");
+            }
         }
 
         /// <summary>
@@ -614,6 +582,13 @@ namespace Regulyators.UI.ViewModels
         private void ToggleAllProtections()
         {
             AllProtectionsEnabled = !AllProtectionsEnabled;
+
+            // Отправляем команду включения/выключения защит через COM-порт
+            if (IsConnected)
+            {
+                // Здесь должна быть реализация команды для включения/выключения защит
+                // в соответствии с протоколом ЭРЧМ30ТЗ
+            }
 
             if (!AllProtectionsEnabled)
             {
@@ -632,6 +607,12 @@ namespace Regulyators.UI.ViewModels
                 LogProtectionEvent("Система защит", "Защиты включены", "Все защиты включены");
                 _loggingService.LogInfo("Все защиты включены");
                 StatusMessage = "Все защиты включены";
+
+                // Повторно проверяем состояние защит
+                CheckOilPressureProtection();
+                CheckEngineSpeedProtection();
+                CheckBoostPressureProtection();
+                CheckOilTemperatureProtection();
             }
         }
 
@@ -642,6 +623,7 @@ namespace Regulyators.UI.ViewModels
         {
             _protectionEvents.Clear();
             StatusMessage = "Журнал событий очищен";
+            _loggingService.LogInfo("Журнал событий защиты очищен");
         }
 
         /// <summary>
@@ -649,7 +631,7 @@ namespace Regulyators.UI.ViewModels
         /// </summary>
         private void RefreshValues()
         {
-            if (!IsDemoMode && IsConnected)
+            if (IsConnected)
             {
                 // Отправляем команду запроса параметров
                 _comPortService.SendCommand(new ERCHM30TZCommand
@@ -667,47 +649,8 @@ namespace Regulyators.UI.ViewModels
             }
             else
             {
-                // В демо-режиме просто генерируем новые значения
-                GenerateDemoValues();
-                LastUpdateTime = DateTime.Now;
-                StatusMessage = "Данные обновлены (демо-режим)";
-            }
-        }
-
-        /// <summary>
-        /// Переключение демо-режима
-        /// </summary>
-        private void ToggleDemoMode()
-        {
-            IsDemoMode = !IsDemoMode;
-
-            if (!IsDemoMode)
-            {
-                // Пробуем подключиться к оборудованию
-                IsConnected = _comPortService.Connect();
-                StatusMessage = IsConnected ? "Подключено к оборудованию" : "Ошибка подключения";
-
-                if (IsConnected)
-                {
-                    _loggingService.LogInfo("Подключение к оборудованию");
-                }
-                else
-                {
-                    _loggingService.LogWarning("Ошибка подключения, возврат в демо-режим");
-                    IsDemoMode = true;
-                }
-            }
-            else
-            {
-                // Отключаемся от оборудования
-                if (IsConnected)
-                {
-                    _comPortService.Disconnect();
-                    IsConnected = false;
-                }
-
-                StatusMessage = "Переход в демо-режим";
-                _loggingService.LogInfo("Переход в демо-режим");
+                StatusMessage = "Невозможно обновить данные: нет соединения";
+                _loggingService.LogWarning("Попытка обновления данных при отсутствии соединения");
             }
         }
 
@@ -726,7 +669,7 @@ namespace Regulyators.UI.ViewModels
             };
 
             // Добавляем в журнал в UI-потоке
-            System.Windows.Application.Current.Dispatcher.Invoke(() =>
+            Application.Current.Dispatcher.Invoke(() =>
             {
                 _protectionEvents.Insert(0, protectionEvent); // Добавляем в начало списка
 

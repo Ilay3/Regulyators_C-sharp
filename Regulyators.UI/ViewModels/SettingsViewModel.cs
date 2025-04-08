@@ -4,7 +4,7 @@ using System.IO;
 using System.Linq;
 using System.Text.Json;
 using System.Windows.Input;
-using System.Xml;
+using System.IO.Ports;
 using Regulyators.UI.Common;
 using Regulyators.UI.Models;
 using Regulyators.UI.Services;
@@ -18,15 +18,19 @@ namespace Regulyators.UI.ViewModels
     {
         private readonly ComPortService _comPortService;
         private readonly LoggingService _loggingService;
+        private readonly SettingsService _settingsService;
 
         private ComPortSettings _comPortSettings;
         private ProtectionThresholds _protectionThresholds;
         private string _selectedPortName;
         private int _selectedBaudRate;
+        private StopBits _selectedStopBits;
+        private Parity _selectedParity;
         private string _configFilePath;
         private string _statusMessage;
         private bool _applyButtonEnabled;
         private string[] _availablePorts;
+        private bool _isConnectionActive;
 
         #region Свойства
 
@@ -36,7 +40,16 @@ namespace Regulyators.UI.ViewModels
         public ComPortSettings ComPortSettings
         {
             get => _comPortSettings;
-            set => SetProperty(ref _comPortSettings, value);
+            set
+            {
+                if (SetProperty(ref _comPortSettings, value))
+                {
+                    SelectedPortName = value.PortName;
+                    SelectedBaudRate = value.BaudRate;
+                    SelectedStopBits = value.StopBits;
+                    SelectedParity = value.Parity;
+                }
+            }
         }
 
         /// <summary>
@@ -81,6 +94,38 @@ namespace Regulyators.UI.ViewModels
         }
 
         /// <summary>
+        /// Выбранные стоповые биты
+        /// </summary>
+        public StopBits SelectedStopBits
+        {
+            get => _selectedStopBits;
+            set
+            {
+                if (SetProperty(ref _selectedStopBits, value))
+                {
+                    ComPortSettings.StopBits = value;
+                    ApplyButtonEnabled = true;
+                }
+            }
+        }
+
+        /// <summary>
+        /// Выбранная четность
+        /// </summary>
+        public Parity SelectedParity
+        {
+            get => _selectedParity;
+            set
+            {
+                if (SetProperty(ref _selectedParity, value))
+                {
+                    ComPortSettings.Parity = value;
+                    ApplyButtonEnabled = true;
+                }
+            }
+        }
+
+        /// <summary>
         /// Путь к файлу конфигурации
         /// </summary>
         public string ConfigFilePath
@@ -117,9 +162,62 @@ namespace Regulyators.UI.ViewModels
         }
 
         /// <summary>
+        /// Активно ли соединение с COM-портом
+        /// </summary>
+        public bool IsConnectionActive
+        {
+            get => _isConnectionActive;
+            set => SetProperty(ref _isConnectionActive, value);
+        }
+
+        /// <summary>
         /// Доступные скорости передачи
         /// </summary>
-        public int[] BaudRates { get; } = { 9600, 19200, 38400, 57600, 115200 };
+        public List<int> BaudRates { get; } = new List<int> { 9600, 19200, 38400, 57600, 115200 };
+
+        /// <summary>
+        /// Доступные стоповые биты
+        /// </summary>
+        public List<StopBits> StopBitsList { get; } = new List<StopBits>
+        {
+            StopBits.One,
+            StopBits.OnePointFive,
+            StopBits.Two
+        };
+
+        /// <summary>
+        /// Доступные типы четности
+        /// </summary>
+        public List<Parity> ParityList { get; } = new List<Parity>
+        {
+            Parity.None,
+            Parity.Odd,
+            Parity.Even,
+            Parity.Mark,
+            Parity.Space
+        };
+
+        /// <summary>
+        /// Названия типов четности для отображения
+        /// </summary>
+        public Dictionary<Parity, string> ParityNames { get; } = new Dictionary<Parity, string>
+        {
+            { Parity.None, "Нет" },
+            { Parity.Odd, "Нечетные" },
+            { Parity.Even, "Четные" },
+            { Parity.Mark, "Маркер" },
+            { Parity.Space, "Пробел" }
+        };
+
+        /// <summary>
+        /// Названия типов стоповых битов для отображения
+        /// </summary>
+        public Dictionary<StopBits, string> StopBitsNames { get; } = new Dictionary<StopBits, string>
+        {
+            { StopBits.One, "1" },
+            { StopBits.OnePointFive, "1.5" },
+            { StopBits.Two, "2" }
+        };
 
         #endregion
 
@@ -150,6 +248,16 @@ namespace Regulyators.UI.ViewModels
         /// </summary>
         public ICommand ResetToDefaultCommand { get; }
 
+        /// <summary>
+        /// Команда подключения к COM-порту
+        /// </summary>
+        public ICommand ConnectCommand { get; }
+
+        /// <summary>
+        /// Команда отключения от COM-порта
+        /// </summary>
+        public ICommand DisconnectCommand { get; }
+
         #endregion
 
         /// <summary>
@@ -159,23 +267,23 @@ namespace Regulyators.UI.ViewModels
         {
             _comPortService = ComPortService.Instance;
             _loggingService = LoggingService.Instance;
+            _settingsService = SettingsService.Instance;
 
             // Инициализация настроек
-            _comPortSettings = _comPortService.Settings.Clone();
-            _protectionThresholds = new ProtectionThresholds();
+            _comPortSettings = _settingsService.ComPortSettings.Clone();
+            _protectionThresholds = _settingsService.ProtectionThresholds.Clone();
 
-            // Путь к файлу конфигурации по умолчанию
-            ConfigFilePath = Path.Combine(
-                Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
-                "Regulyators",
-                "config.json");
-
-            // Обеспечиваем существование директории
-            Directory.CreateDirectory(Path.GetDirectoryName(ConfigFilePath));
+            // Путь к файлу конфигурации
+            ConfigFilePath = _settingsService.DefaultConfigFilePath;
 
             // Инициализация выбранных значений
             _selectedPortName = _comPortSettings.PortName;
             _selectedBaudRate = _comPortSettings.BaudRate;
+            _selectedStopBits = _comPortSettings.StopBits;
+            _selectedParity = _comPortSettings.Parity;
+
+            // Проверка активности соединения
+            IsConnectionActive = _comPortService.IsConnected;
 
             // Получение доступных портов
             RefreshPorts();
@@ -186,13 +294,26 @@ namespace Regulyators.UI.ViewModels
             SaveSettingsCommand = new RelayCommand(SaveSettings);
             LoadSettingsCommand = new RelayCommand(LoadSettings);
             ResetToDefaultCommand = new RelayCommand(ResetToDefault);
+            ConnectCommand = new RelayCommand(Connect, () => !IsConnectionActive);
+            DisconnectCommand = new RelayCommand(Disconnect, () => IsConnectionActive);
 
             // По умолчанию кнопка применения недоступна
             ApplyButtonEnabled = false;
 
-            // Регистрация обработчиков событий изменения настроек
+            // Регистрация обработчиков событий
             _comPortSettings.PropertyChanged += (sender, args) => ApplyButtonEnabled = true;
             _protectionThresholds.PropertyChanged += (sender, args) => ApplyButtonEnabled = true;
+            _comPortService.ConnectionStatusChanged += OnConnectionStatusChanged;
+
+            _loggingService.LogInfo("Модуль настроек инициализирован");
+        }
+
+        /// <summary>
+        /// Обработчик изменения статуса подключения
+        /// </summary>
+        private void OnConnectionStatusChanged(object sender, bool isConnected)
+        {
+            IsConnectionActive = isConnected;
         }
 
         /// <summary>
@@ -211,6 +332,8 @@ namespace Regulyators.UI.ViewModels
                 {
                     SelectedPortName = AvailablePorts[0];
                 }
+
+                _loggingService.LogInfo($"Обновлен список COM-портов, найдено {AvailablePorts.Length} портов");
             }
             catch (Exception ex)
             {
@@ -227,11 +350,10 @@ namespace Regulyators.UI.ViewModels
             try
             {
                 // Обновляем настройки COM-порта
-                _comPortService.UpdateSettings(_comPortSettings.Clone());
+                _settingsService.UpdateComPortSettings(_comPortSettings.Clone());
 
-                // Обновляем пороги защит в EngineParameters
-                // (в реальном приложении здесь нужно обновлять настройки через соответствующий сервис)
-                // ...
+                // Обновляем пороги защит
+                _settingsService.UpdateProtectionThresholds(_protectionThresholds.Clone());
 
                 _loggingService.LogInfo("Настройки применены");
                 StatusMessage = "Настройки успешно применены";
@@ -251,21 +373,8 @@ namespace Regulyators.UI.ViewModels
         {
             try
             {
-                // Создаем объект с настройками
-                var settings = new
-                {
-                    ComPort = _comPortSettings,
-                    Protection = _protectionThresholds
-                };
-
-                // Преобразуем в JSON
-                string json = JsonSerializer.Serialize(settings, new JsonSerializerOptions
-                {
-                    WriteIndented = true
-                });
-
-                // Сохраняем в файл
-                File.WriteAllText(ConfigFilePath, json);
+                // Сохраняем настройки через сервис настроек
+                _settingsService.SaveSettings(ConfigFilePath);
 
                 _loggingService.LogInfo("Настройки сохранены", ConfigFilePath);
                 StatusMessage = "Настройки успешно сохранены";
@@ -284,38 +393,12 @@ namespace Regulyators.UI.ViewModels
         {
             try
             {
-                if (!File.Exists(ConfigFilePath))
-                {
-                    _loggingService.LogWarning("Файл настроек не найден", ConfigFilePath);
-                    StatusMessage = "Файл настроек не найден";
-                    return;
-                }
+                // Загружаем настройки через сервис настроек
+                _settingsService.LoadSettings(ConfigFilePath);
 
-                // Читаем JSON из файла
-                string json = File.ReadAllText(ConfigFilePath);
-
-                // Десериализуем в объект
-                var settingsObj = JsonSerializer.Deserialize<Dictionary<string, JsonElement>>(json);
-
-                if (settingsObj.TryGetValue("ComPort", out var comPortJson))
-                {
-                    var comPortSettings = JsonSerializer.Deserialize<ComPortSettings>(comPortJson.GetRawText());
-                    if (comPortSettings != null)
-                    {
-                        ComPortSettings = comPortSettings;
-                        SelectedPortName = comPortSettings.PortName;
-                        SelectedBaudRate = comPortSettings.BaudRate;
-                    }
-                }
-
-                if (settingsObj.TryGetValue("Protection", out var protectionJson))
-                {
-                    var protectionThresholds = JsonSerializer.Deserialize<ProtectionThresholds>(protectionJson.GetRawText());
-                    if (protectionThresholds != null)
-                    {
-                        ProtectionThresholds = protectionThresholds;
-                    }
-                }
+                // Обновляем локальные копии настроек
+                ComPortSettings = _settingsService.ComPortSettings.Clone();
+                ProtectionThresholds = _settingsService.ProtectionThresholds.Clone();
 
                 _loggingService.LogInfo("Настройки загружены", ConfigFilePath);
                 StatusMessage = "Настройки успешно загружены";
@@ -335,13 +418,18 @@ namespace Regulyators.UI.ViewModels
         {
             try
             {
-                // Создаем настройки по умолчанию
-                ComPortSettings = new ComPortSettings();
-                ProtectionThresholds = new ProtectionThresholds();
+                // Сбрасываем настройки через сервис настроек
+                _settingsService.ResetToDefaults();
+
+                // Обновляем локальные копии настроек
+                ComPortSettings = _settingsService.ComPortSettings.Clone();
+                ProtectionThresholds = _settingsService.ProtectionThresholds.Clone();
 
                 // Обновляем выбранные значения
                 SelectedPortName = ComPortSettings.PortName;
                 SelectedBaudRate = ComPortSettings.BaudRate;
+                SelectedStopBits = ComPortSettings.StopBits;
+                SelectedParity = ComPortSettings.Parity;
 
                 _loggingService.LogInfo("Настройки сброшены по умолчанию");
                 StatusMessage = "Настройки сброшены по умолчанию";
@@ -351,6 +439,53 @@ namespace Regulyators.UI.ViewModels
             {
                 _loggingService.LogError("Ошибка сброса настроек", ex.Message);
                 StatusMessage = "Ошибка сброса настроек";
+            }
+        }
+
+        /// <summary>
+        /// Подключение к COM-порту
+        /// </summary>
+        private void Connect()
+        {
+            try
+            {
+                // Применяем текущие настройки
+                _settingsService.UpdateComPortSettings(_comPortSettings.Clone());
+
+                // Подключаемся к порту
+                bool result = _comPortService.Connect();
+                if (result)
+                {
+                    StatusMessage = "Подключение к COM-порту выполнено успешно";
+                    IsConnectionActive = true;
+                }
+                else
+                {
+                    StatusMessage = "Не удалось подключиться к COM-порту";
+                }
+            }
+            catch (Exception ex)
+            {
+                _loggingService.LogError("Ошибка подключения к COM-порту", ex.Message);
+                StatusMessage = "Ошибка подключения к COM-порту";
+            }
+        }
+
+        /// <summary>
+        /// Отключение от COM-порта
+        /// </summary>
+        private void Disconnect()
+        {
+            try
+            {
+                _comPortService.Disconnect();
+                StatusMessage = "Отключение от COM-порта выполнено";
+                IsConnectionActive = false;
+            }
+            catch (Exception ex)
+            {
+                _loggingService.LogError("Ошибка отключения от COM-порта", ex.Message);
+                StatusMessage = "Ошибка отключения от COM-порта";
             }
         }
     }
