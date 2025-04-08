@@ -6,6 +6,7 @@ using System.Linq;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
+using System.Windows;
 using Regulyators.UI.Models;
 
 namespace Regulyators.UI.Services
@@ -372,25 +373,92 @@ namespace Regulyators.UI.Services
                 Details = details
             };
 
-            // Добавляем в коллекцию синхронно
-            lock (_lockObj)
+            try
             {
-                // Для UI потока используем Dispatcher, но в нашем случае Logs безопасен для многопоточного доступа
-                Logs.Add(entry);
+                // Добавление в UI поток более надёжным способом
+                if (Application.Current?.Dispatcher != null)
+                {
+                    if (Application.Current.Dispatcher.CheckAccess())
+                    {
+                        // Уже в UI потоке
+                        lock (_lockObj)
+                        {
+                            Logs.Add(entry);
+                            while (Logs.Count > _maxLogEntries)
+                            {
+                                Logs.RemoveAt(Logs.Count - 1);
+                            }
+                        }
+                    }
+                    else
+                    {
+                        // Не в UI потоке - используем BeginInvoke для асинхронного вызова
+                        // чтобы избежать возможной блокировки
+                        Application.Current.Dispatcher.BeginInvoke(new Action(() =>
+                        {
+                            lock (_lockObj)
+                            {
+                                Logs.Add(entry);
+                                while (Logs.Count > _maxLogEntries)
+                                {
+                                    Logs.RemoveAt(Logs.Count - 1);
+                                }
+                            }
+                        }));
+                    }
+                }
+                else
+                {
+                    // В случае если Application.Current недоступен, 
+                    // записываем только в файл, но не в коллекцию
+                    if (saveToFile && _saveToFile)
+                    {
+                        Task.Run(() => SaveLogToFileInternal(entry));
+                    }
+                    return; // Выходим, чтобы не вызывать события
+                }
 
-                // Ограничиваем размер журнала
-                EnsureLogSizeLimit();
+                // Вызываем событие только для потокобезопасных подписчиков
+                // или если находимся в UI потоке
+                if (Application.Current?.Dispatcher?.CheckAccess() == true)
+                {
+                    LogAdded?.Invoke(this, entry);
+                }
+
+                // Сохранение в файл
+                if (saveToFile && _saveToFile && type == "Ошибка")
+                {
+                    Task.Run(() => SaveLogToFileInternal(entry));
+                }
             }
-
-            // Вызываем событие
-            LogAdded?.Invoke(this, entry);
-
-            // Немедленное сохранение в файл для ошибок
-            if (saveToFile && _saveToFile && type == "Ошибка")
+            catch (Exception ex)
             {
-                Task.Run(() => SaveLogToFile());
+                // Запись в файл при сбое 
+                try
+                {
+                    File.AppendAllText(
+                        Path.Combine(_logFolder, "critical_errors.log"),
+                        $"{DateTime.Now:yyyy-MM-dd HH:mm:ss}|Сбой логирования|{ex.Message}\r\n"
+                    );
+                }
+                catch { /* В крайнем случае просто игнорируем */ }
             }
         }
+
+        // Специальный метод для записи одной записи в файл
+        private void SaveLogToFileInternal(LogEntry entry)
+        {
+            try
+            {
+                EnsureLogDirectoryExists();
+                File.AppendAllText(
+                    CurrentLogFile,
+                    $"{entry.Timestamp:yyyy-MM-dd HH:mm:ss.fff}|{entry.Type}|{entry.Message}|{entry.Details}\r\n"
+                );
+            }
+            catch { /* Игнорируем ошибки при записи в файл */ }
+        }
+
 
         /// <summary>
         /// Проверка и ограничение размера журнала
