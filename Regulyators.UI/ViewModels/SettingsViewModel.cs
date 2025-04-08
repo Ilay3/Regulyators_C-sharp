@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Text.Json;
+using System.Threading.Tasks;
 using System.Windows.Input;
 using System.IO.Ports;
 using Regulyators.UI.Common;
@@ -31,6 +32,8 @@ namespace Regulyators.UI.ViewModels
         private bool _applyButtonEnabled;
         private string[] _availablePorts;
         private bool _isConnectionActive;
+        private bool _isBusy;
+        private string _busyMessage;
 
         #region Свойства
 
@@ -171,6 +174,24 @@ namespace Regulyators.UI.ViewModels
         }
 
         /// <summary>
+        /// Флаг выполнения длительной операции
+        /// </summary>
+        public bool IsBusy
+        {
+            get => _isBusy;
+            set => SetProperty(ref _isBusy, value);
+        }
+
+        /// <summary>
+        /// Сообщение о текущей выполняемой операции
+        /// </summary>
+        public string BusyMessage
+        {
+            get => _busyMessage;
+            set => SetProperty(ref _busyMessage, value);
+        }
+
+        /// <summary>
         /// Доступные скорости передачи
         /// </summary>
         public List<int> BaudRates { get; } = new List<int> { 9600, 19200, 38400, 57600, 115200 };
@@ -290,15 +311,16 @@ namespace Regulyators.UI.ViewModels
 
             // Инициализация команд
             RefreshPortsCommand = new RelayCommand(RefreshPorts);
-            ApplySettingsCommand = new RelayCommand(ApplySettings, () => ApplyButtonEnabled);
-            SaveSettingsCommand = new RelayCommand(SaveSettings);
-            LoadSettingsCommand = new RelayCommand(LoadSettings);
-            ResetToDefaultCommand = new RelayCommand(ResetToDefault);
-            ConnectCommand = new RelayCommand(Connect, () => !IsConnectionActive);
-            DisconnectCommand = new RelayCommand(Disconnect, () => IsConnectionActive);
+            ApplySettingsCommand = new RelayCommand(ApplySettings, () => ApplyButtonEnabled && !IsBusy);
+            SaveSettingsCommand = new RelayCommand(SaveSettings, () => !IsBusy);
+            LoadSettingsCommand = new RelayCommand(LoadSettings, () => !IsBusy);
+            ResetToDefaultCommand = new RelayCommand(ResetToDefault, () => !IsBusy);
+            ConnectCommand = new RelayCommand(Connect, () => !IsConnectionActive && !IsBusy);
+            DisconnectCommand = new RelayCommand(Disconnect, () => IsConnectionActive && !IsBusy);
 
             // По умолчанию кнопка применения недоступна
             ApplyButtonEnabled = false;
+            IsBusy = false;
 
             // Регистрация обработчиков событий
             _comPortSettings.PropertyChanged += (sender, args) => ApplyButtonEnabled = true;
@@ -319,11 +341,18 @@ namespace Regulyators.UI.ViewModels
         /// <summary>
         /// Обновление списка доступных COM-портов
         /// </summary>
-        private void RefreshPorts()
+        private async void RefreshPorts()
         {
             try
             {
-                AvailablePorts = _comPortService.GetAvailablePorts();
+                // Устанавливаем флаг выполнения операции
+                IsBusy = true;
+                BusyMessage = "Поиск доступных портов...";
+
+                // Асинхронно получаем список портов
+                var ports = await Task.Run(() => _comPortService.GetAvailablePorts());
+
+                AvailablePorts = ports;
                 StatusMessage = $"Найдено портов: {AvailablePorts.Length}";
 
                 // Если текущий порт не найден в списке, но список не пуст,
@@ -340,20 +369,33 @@ namespace Regulyators.UI.ViewModels
                 _loggingService.LogError("Ошибка получения списка портов", ex.Message);
                 StatusMessage = "Ошибка получения списка портов";
             }
+            finally
+            {
+                // Снимаем флаг выполнения операции
+                IsBusy = false;
+                BusyMessage = string.Empty;
+            }
         }
 
         /// <summary>
         /// Применение настроек
         /// </summary>
-        private void ApplySettings()
+        private async void ApplySettings()
         {
             try
             {
-                // Обновляем настройки COM-порта
-                _settingsService.UpdateComPortSettings(_comPortSettings.Clone());
+                // Устанавливаем флаг выполнения операции
+                IsBusy = true;
+                BusyMessage = "Применение настроек...";
 
-                // Обновляем пороги защит
-                _settingsService.UpdateProtectionThresholds(_protectionThresholds.Clone());
+                // Асинхронно применяем настройки
+                await Task.Run(() => {
+                    // Обновляем настройки COM-порта
+                    _settingsService.UpdateComPortSettings(_comPortSettings.Clone());
+
+                    // Обновляем пороги защит
+                    _settingsService.UpdateProtectionThresholds(_protectionThresholds.Clone());
+                });
 
                 _loggingService.LogInfo("Настройки применены");
                 StatusMessage = "Настройки успешно применены";
@@ -364,17 +406,27 @@ namespace Regulyators.UI.ViewModels
                 _loggingService.LogError("Ошибка применения настроек", ex.Message);
                 StatusMessage = "Ошибка применения настроек";
             }
+            finally
+            {
+                // Снимаем флаг выполнения операции
+                IsBusy = false;
+                BusyMessage = string.Empty;
+            }
         }
 
         /// <summary>
         /// Сохранение настроек в файл
         /// </summary>
-        private void SaveSettings()
+        private async void SaveSettings()
         {
             try
             {
-                // Сохраняем настройки через сервис настроек
-                _settingsService.SaveSettings(ConfigFilePath);
+                // Устанавливаем флаг выполнения операции
+                IsBusy = true;
+                BusyMessage = "Сохранение настроек...";
+
+                // Асинхронно сохраняем настройки
+                await Task.Run(() => _settingsService.SaveSettings(ConfigFilePath));
 
                 _loggingService.LogInfo("Настройки сохранены", ConfigFilePath);
                 StatusMessage = "Настройки успешно сохранены";
@@ -384,42 +436,70 @@ namespace Regulyators.UI.ViewModels
                 _loggingService.LogError("Ошибка сохранения настроек", ex.Message);
                 StatusMessage = "Ошибка сохранения настроек";
             }
+            finally
+            {
+                // Снимаем флаг выполнения операции
+                IsBusy = false;
+                BusyMessage = string.Empty;
+            }
         }
 
         /// <summary>
         /// Загрузка настроек из файла
         /// </summary>
-        private void LoadSettings()
+        private async void LoadSettings()
         {
             try
             {
-                // Загружаем настройки через сервис настроек
-                _settingsService.LoadSettings(ConfigFilePath);
+                // Устанавливаем флаг выполнения операции
+                IsBusy = true;
+                BusyMessage = "Загрузка настроек...";
 
-                // Обновляем локальные копии настроек
-                ComPortSettings = _settingsService.ComPortSettings.Clone();
-                ProtectionThresholds = _settingsService.ProtectionThresholds.Clone();
+                // Асинхронно загружаем настройки
+                bool result = await Task.Run(() => _settingsService.LoadSettings(ConfigFilePath));
 
-                _loggingService.LogInfo("Настройки загружены", ConfigFilePath);
-                StatusMessage = "Настройки успешно загружены";
-                ApplyButtonEnabled = true;
+                if (result)
+                {
+                    // Обновляем локальные копии настроек
+                    ComPortSettings = _settingsService.ComPortSettings.Clone();
+                    ProtectionThresholds = _settingsService.ProtectionThresholds.Clone();
+
+                    _loggingService.LogInfo("Настройки загружены", ConfigFilePath);
+                    StatusMessage = "Настройки успешно загружены";
+                    ApplyButtonEnabled = true;
+                }
+                else
+                {
+                    _loggingService.LogWarning("Не удалось загрузить настройки из файла", ConfigFilePath);
+                    StatusMessage = "Не удалось загрузить настройки из файла";
+                }
             }
             catch (Exception ex)
             {
                 _loggingService.LogError("Ошибка загрузки настроек", ex.Message);
                 StatusMessage = "Ошибка загрузки настроек";
             }
+            finally
+            {
+                // Снимаем флаг выполнения операции
+                IsBusy = false;
+                BusyMessage = string.Empty;
+            }
         }
 
         /// <summary>
         /// Сброс настроек по умолчанию
         /// </summary>
-        private void ResetToDefault()
+        private async void ResetToDefault()
         {
             try
             {
-                // Сбрасываем настройки через сервис настроек
-                _settingsService.ResetToDefaults();
+                // Устанавливаем флаг выполнения операции
+                IsBusy = true;
+                BusyMessage = "Сброс настроек...";
+
+                // Асинхронно сбрасываем настройки
+                await Task.Run(() => _settingsService.ResetToDefaults());
 
                 // Обновляем локальные копии настроек
                 ComPortSettings = _settingsService.ComPortSettings.Clone();
@@ -440,20 +520,31 @@ namespace Regulyators.UI.ViewModels
                 _loggingService.LogError("Ошибка сброса настроек", ex.Message);
                 StatusMessage = "Ошибка сброса настроек";
             }
+            finally
+            {
+                // Снимаем флаг выполнения операции
+                IsBusy = false;
+                BusyMessage = string.Empty;
+            }
         }
 
         /// <summary>
         /// Подключение к COM-порту
         /// </summary>
-        private void Connect()
+        private async void Connect()
         {
             try
             {
+                // Устанавливаем флаг выполнения операции
+                IsBusy = true;
+                BusyMessage = "Выполняется подключение...";
+
                 // Применяем текущие настройки
                 _settingsService.UpdateComPortSettings(_comPortSettings.Clone());
 
-                // Подключаемся к порту
-                bool result = _comPortService.Connect();
+                // Асинхронно выполняем подключение
+                bool result = await Task.Run(() => _comPortService.Connect());
+
                 if (result)
                 {
                     StatusMessage = "Подключение к COM-порту выполнено успешно";
@@ -469,16 +560,28 @@ namespace Regulyators.UI.ViewModels
                 _loggingService.LogError("Ошибка подключения к COM-порту", ex.Message);
                 StatusMessage = "Ошибка подключения к COM-порту";
             }
+            finally
+            {
+                // Снимаем флаг выполнения операции
+                IsBusy = false;
+                BusyMessage = string.Empty;
+            }
         }
 
         /// <summary>
         /// Отключение от COM-порта
         /// </summary>
-        private void Disconnect()
+        private async void Disconnect()
         {
             try
             {
-                _comPortService.Disconnect();
+                // Устанавливаем флаг выполнения операции
+                IsBusy = true;
+                BusyMessage = "Выполняется отключение...";
+
+                // Асинхронно выполняем отключение
+                await Task.Run(() => _comPortService.Disconnect());
+
                 StatusMessage = "Отключение от COM-порта выполнено";
                 IsConnectionActive = false;
             }
@@ -487,6 +590,38 @@ namespace Regulyators.UI.ViewModels
                 _loggingService.LogError("Ошибка отключения от COM-порта", ex.Message);
                 StatusMessage = "Ошибка отключения от COM-порта";
             }
+            finally
+            {
+                // Снимаем флаг выполнения операции
+                IsBusy = false;
+                BusyMessage = string.Empty;
+            }
+        }
+
+        /// <summary>
+        /// Освобождение управляемых ресурсов
+        /// </summary>
+        protected override void ReleaseMangedResources()
+        {
+            base.ReleaseMangedResources();
+
+            // Отписываемся от всех событий
+            if (_comPortSettings != null)
+            {
+                _comPortSettings.PropertyChanged -= (sender, args) => ApplyButtonEnabled = true;
+            }
+
+            if (_protectionThresholds != null)
+            {
+                _protectionThresholds.PropertyChanged -= (sender, args) => ApplyButtonEnabled = true;
+            }
+
+            if (_comPortService != null)
+            {
+                _comPortService.ConnectionStatusChanged -= OnConnectionStatusChanged;
+            }
+
+            _loggingService?.LogInfo("SettingsViewModel: ресурсы освобождены");
         }
     }
 }

@@ -23,6 +23,8 @@ namespace Regulyators.UI.ViewModels
         private Brush _connectionStatusColor;
         private string _statusMessage;
         private DateTime _currentDateTime;
+        private bool _isBusy;
+        private string _busyMessage;
 
         /// <summary>
         /// Текущее представление
@@ -86,6 +88,24 @@ namespace Regulyators.UI.ViewModels
         }
 
         /// <summary>
+        /// Флаг занятости для отображения индикатора прогресса
+        /// </summary>
+        public bool IsBusy
+        {
+            get => _isBusy;
+            set => SetProperty(ref _isBusy, value);
+        }
+
+        /// <summary>
+        /// Сообщение о текущей операции для индикатора прогресса
+        /// </summary>
+        public string BusyMessage
+        {
+            get => _busyMessage;
+            set => SetProperty(ref _busyMessage, value);
+        }
+
+        /// <summary>
         /// Элементы меню
         /// </summary>
         public ObservableCollection<MenuItem> MenuItems { get; }
@@ -111,6 +131,8 @@ namespace Regulyators.UI.ViewModels
             ConnectionStatusColor = Brushes.Red;
             StatusMessage = "Приложение запущено";
             CurrentDateTime = DateTime.Now;
+            IsBusy = false;
+            BusyMessage = string.Empty;
 
             // Создание моделей представления
             var engineParamsViewModel = new EngineParametersViewModel();
@@ -165,7 +187,6 @@ namespace Regulyators.UI.ViewModels
                     Title = "Режим симуляции",
                     ViewModel = simulationViewModel
                 }
-
             };
 
             // Выбор первого пункта меню по умолчанию
@@ -204,15 +225,45 @@ namespace Regulyators.UI.ViewModels
         /// </summary>
         private async Task SimulateConnection()
         {
-            await Task.Delay(2000);
-
-            // Обновляем статус в UI потоке
-            Application.Current.Dispatcher.Invoke(() =>
+            try
             {
-                ConnectionStatus = "Подключено";
-                ConnectionStatusColor = Brushes.Green;
-                StatusMessage = "Подключение к оборудованию установлено";
-            });
+                // Показываем индикатор занятости
+                Application.Current.Dispatcher.Invoke(() =>
+                {
+                    IsBusy = true;
+                    BusyMessage = "Подключение к оборудованию...";
+                });
+
+                await Task.Delay(2000);
+
+                // Обновляем статус в UI потоке
+                Application.Current.Dispatcher.Invoke(() =>
+                {
+                    ConnectionStatus = "Подключено";
+                    ConnectionStatusColor = Brushes.Green;
+                    StatusMessage = "Подключение к оборудованию установлено";
+
+                    // Скрываем индикатор занятости
+                    IsBusy = false;
+                    BusyMessage = string.Empty;
+                });
+            }
+            catch (Exception ex)
+            {
+                _loggingService.LogError("Ошибка при подключении к оборудованию", ex.Message);
+
+                // Обновляем статус в UI потоке
+                Application.Current.Dispatcher.Invoke(() =>
+                {
+                    ConnectionStatus = "Ошибка подключения";
+                    ConnectionStatusColor = Brushes.Red;
+                    StatusMessage = $"Ошибка подключения: {ex.Message}";
+
+                    // Скрываем индикатор занятости
+                    IsBusy = false;
+                    BusyMessage = string.Empty;
+                });
+            }
         }
 
         /// <summary>
@@ -221,6 +272,52 @@ namespace Regulyators.UI.ViewModels
         private void Timer_Tick(object sender, EventArgs e)
         {
             CurrentDateTime = DateTime.Now;
+        }
+
+        /// <summary>
+        /// Показать индикатор занятости с сообщением
+        /// </summary>
+        public void ShowBusy(string message)
+        {
+            IsBusy = true;
+            BusyMessage = message;
+        }
+
+        /// <summary>
+        /// Скрыть индикатор занятости
+        /// </summary>
+        public void HideBusy()
+        {
+            IsBusy = false;
+            BusyMessage = string.Empty;
+        }
+
+        /// <summary>
+        /// Освобождение ресурсов
+        /// </summary>
+        protected override void ReleaseMangedResources()
+        {
+            base.ReleaseMangedResources();
+
+            // Останавливаем таймер
+            _timer?.Stop();
+
+            // Отписываемся от событий
+            if (_comPortService != null)
+            {
+                _comPortService.ConnectionStatusChanged -= OnConnectionStatusChanged;
+            }
+
+            // Освобождаем ресурсы дочерних view model
+            foreach (var menuItem in MenuItems)
+            {
+                if (menuItem.ViewModel is IDisposable disposable)
+                {
+                    disposable.Dispose();
+                }
+            }
+
+            _loggingService?.LogInfo("MainViewModel ресурсы освобождены");
         }
     }
 }
