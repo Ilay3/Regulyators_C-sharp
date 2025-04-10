@@ -254,7 +254,7 @@ namespace Regulyators.UI.Services
                         {
                             ProtectionThresholds = protectionThresholds;
                             hasChanges = true;
-                            _loggingService.LogInfo("Загружены пороги защит");
+                            _loggingService.LogInfo("Загружены пороги защиты");
                         }
                     }
 
