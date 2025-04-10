@@ -15,13 +15,39 @@
             <RowDefinition Height="Auto"/>
         </Grid.RowDefinitions>
 
-        <!-- Заголовок -->
-        <TextBlock 
-            Grid.Row="0"
-            Text="График параметров двигателя" 
-            FontSize="18" 
-            FontWeight="Bold" 
-            Margin="0,0,0,8"/>
+        <!-- Заголовок и статус -->
+        <Grid Grid.Row="0" Margin="0,0,0,8">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="Auto"/>
+                <ColumnDefinition Width="*"/>
+                <ColumnDefinition Width="Auto"/>
+            </Grid.ColumnDefinitions>
+
+            <!-- Заголовок -->
+            <TextBlock 
+                Grid.Column="0"
+                Text="График параметров двигателя" 
+                FontSize="18" 
+                FontWeight="Bold"/>
+
+            <!-- Статус -->
+            <TextBlock 
+                Grid.Column="1"
+                Text="{Binding StatusMessage}" 
+                Foreground="#555"
+                VerticalAlignment="Center"
+                Margin="16,0,0,0"/>
+
+            <!-- Кнопка генерации тестовых данных -->
+            <Button 
+                Grid.Column="2"
+                Content="Тестовые данные" 
+                Command="{Binding GenerateTestDataCommand}"
+                Padding="10,5"
+                Background="#4CAF50"
+                Foreground="White"
+                Margin="0,0,0,0"/>
+        </Grid>
 
         <!-- Основной график -->
         <Border 

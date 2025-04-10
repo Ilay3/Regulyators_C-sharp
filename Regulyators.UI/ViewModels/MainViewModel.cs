@@ -148,6 +148,8 @@ namespace Regulyators.UI.ViewModels
 
             // Новая модель представления для симуляции
             var simulationViewModel = new SimulationViewModel();
+            // Модель представления для расширенных графиков
+            var improvedChartViewModel = new ImprovedChartViewModel();
 
             // Инициализация меню
             MenuItems = new ObservableCollection<MenuItem>
@@ -161,6 +163,11 @@ namespace Regulyators.UI.ViewModels
                 {
                     Title = "Аналоговые индикаторы",
                     ViewModel = gaugePanelViewModel
+                },
+                new MenuItem
+                {
+                    Title = "Расширенные графики",
+                    ViewModel = improvedChartViewModel
                 },
                 new MenuItem
                 {

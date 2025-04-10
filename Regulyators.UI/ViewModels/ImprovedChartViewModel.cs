@@ -31,6 +31,7 @@ namespace Regulyators.UI.ViewModels
         private bool _isGraphInitialized = false;
         private bool _isConnected = false;
         private string _statusMessage;
+        private bool _dataReceived = false;
 
         // Словарь для хранения серий данных графика
         private Dictionary<string, ScatterPlot> _plotSeries = new Dictionary<string, ScatterPlot>();
@@ -192,6 +193,11 @@ namespace Regulyators.UI.ViewModels
         /// </summary>
         public ICommand AutoScaleCommand { get; }
 
+        /// <summary>
+        /// Команда тестирования (добавление демо-данных)
+        /// </summary>
+        public ICommand GenerateTestDataCommand { get; }
+
         #endregion
 
         /// <summary>
@@ -228,6 +234,7 @@ namespace Regulyators.UI.ViewModels
             ExportGraphCommand = new RelayCommand<string>(ExportGraph);
             ExportDataCommand = new RelayCommand(ExportData);
             AutoScaleCommand = new RelayCommand(AutoScale);
+            GenerateTestDataCommand = new RelayCommand(GenerateTestData);
 
             // Установка порогов срабатывания
             EngineParameters.OilPressureCriticalThreshold = _settingsService.ProtectionThresholds.OilPressureMinThreshold;
@@ -244,6 +251,7 @@ namespace Regulyators.UI.ViewModels
 
             // Проверка соединения
             _isConnected = _comPortService.IsConnected;
+            StatusMessage = _isConnected ? "Подключено к оборудованию" : "Ожидание подключения к оборудованию...";
 
             // Логирование
             _loggingService.LogInfo("Запущен модуль графиков двигателя");
@@ -260,30 +268,43 @@ namespace Regulyators.UI.ViewModels
             // Настройка базовых параметров графика
             if (_mainPlot != null)
             {
-                // Включаем интерактивное управление графиком
-                _mainPlot.Configuration.DoubleClickBenchmark = false;
-                _mainPlot.Configuration.LeftClickDragPan = true;  // Включаем панорамирование
-                _mainPlot.Configuration.RightClickDragZoom = true; // Включаем масштабирование
-                _mainPlot.Configuration.ScrollWheelZoom = true;   // Включаем масштабирование колесиком
-                _mainPlot.Configuration.LockVerticalAxis = false; // Разблокируем вертикальную ось
+                try
+                {
+                    // Включаем интерактивное управление графиком
+                    _mainPlot.Configuration.DoubleClickBenchmark = false;
+                    _mainPlot.Configuration.LeftClickDragPan = true;  // Включаем панорамирование
+                    _mainPlot.Configuration.RightClickDragZoom = true; // Включаем масштабирование
+                    _mainPlot.Configuration.ScrollWheelZoom = true;   // Включаем масштабирование колесиком
+                    _mainPlot.Configuration.LockVerticalAxis = false; // Разблокируем вертикальную ось
 
-                // Настройка внешнего вида
-                _mainPlot.Plot.Style(ScottPlot.Style.Seaborn);
-                _mainPlot.Plot.Title("Параметры двигателя");
-                _mainPlot.Plot.XLabel("Время (сек)");
-                _mainPlot.Plot.YLabel("Значение");
-                _mainPlot.Plot.XAxis.TickLabelStyle(fontSize: 12);
-                _mainPlot.Plot.YAxis.TickLabelStyle(fontSize: 12);
-                _mainPlot.Plot.Legend(location: Alignment.UpperRight);
+                    // Настройка внешнего вида
+                    _mainPlot.Plot.Style(ScottPlot.Style.Seaborn);
+                    _mainPlot.Plot.Title("Параметры двигателя");
+                    _mainPlot.Plot.XLabel("Время (сек)");
+                    _mainPlot.Plot.YLabel("Значение");
+                    _mainPlot.Plot.XAxis.TickLabelStyle(fontSize: 12);
+                    _mainPlot.Plot.YAxis.TickLabelStyle(fontSize: 12);
+                    _mainPlot.Plot.Legend(location: Alignment.UpperRight);
 
-                // Создаем серии данных для графика
-                InitializeDataSeries();
+                    // Добавляем текст "Ожидание данных..." на график
+                    _mainPlot.Plot.AddText("Ожидание данных...", 0.5, 0.5,
+                        size: 24, color: System.Drawing.Color.Gray)
+                        .Alignment = ScottPlot.Alignment.MiddleCenter;
 
-                // Обновляем график
-                UpdateGraph();
+                    // Устанавливаем начальные границы осей
+                    _mainPlot.Plot.SetAxisLimits(0, 30, 0, 2500);
 
-                // Устанавливаем оптимальные границы осей
-                AutoScale();
+                    // Создаем серии данных для графика
+                    InitializeDataSeries();
+
+                    // Обновляем график
+                    UpdateGraph();
+                }
+                catch (Exception ex)
+                {
+                    _loggingService.LogError("Ошибка при инициализации графика", ex.Message);
+                    StatusMessage = "Ошибка при инициализации графика";
+                }
             }
         }
 
@@ -294,33 +315,40 @@ namespace Regulyators.UI.ViewModels
         {
             if (_mainPlot == null) return;
 
-            // Создаем и настраиваем серии данных
-            foreach (var series in _seriesColors)
+            try
             {
-                string seriesName = series.Key;
-                Color color = series.Value;
+                // Создаем и настраиваем серии данных
+                foreach (var series in _seriesColors)
+                {
+                    string seriesName = series.Key;
+                    Color color = series.Value;
 
-                // Создаем пустые массивы для данных
-                var xData = new double[0];
-                var yData = new double[0];
+                    // Создаем начальные массивы с одной точкой (чтобы избежать ошибки пустых массивов)
+                    var xData = new double[] { 0 };
+                    var yData = new double[] { 0 };
 
-                // Создаем серию на графике
-                var seriesPlot = _mainPlot.Plot.AddScatter(
-                    xData,
-                    yData,
-                    System.Drawing.Color.FromArgb(color.A, color.R, color.G, color.B),
-                    label: seriesName);
+                    // Создаем серию на графике
+                    var seriesPlot = _mainPlot.Plot.AddScatter(
+                        xData,
+                        yData,
+                        System.Drawing.Color.FromArgb(color.A, color.R, color.G, color.B),
+                        label: seriesName);
 
-                seriesPlot.LineWidth = 2;
-                seriesPlot.MarkerSize = 0; // Без маркеров для лучшей производительности
+                    seriesPlot.LineWidth = 2;
+                    seriesPlot.MarkerSize = 0; // Без маркеров для лучшей производительности
+                    seriesPlot.IsVisible = false; // Начально скрываем все серии
 
-                // Сохраняем серию в словаре
-                _plotSeries[seriesName] = seriesPlot;
+                    // Сохраняем серию в словаре
+                    _plotSeries[seriesName] = seriesPlot;
+                }
+
+                // Обновляем легенду
+                _mainPlot.Plot.Legend();
             }
-
-            // Обновляем легенду
-            _mainPlot.Plot.Legend();
-            _mainPlot.Refresh();
+            catch (Exception ex)
+            {
+                _loggingService.LogError("Ошибка при инициализации серий данных", ex.Message);
+            }
         }
 
         /// <summary>
@@ -347,6 +375,9 @@ namespace Regulyators.UI.ViewModels
 
                     // Обновляем статус
                     StatusMessage = $"Данные обновлены: {parameters.Timestamp:HH:mm:ss}";
+
+                    // Отмечаем, что получили данные
+                    _dataReceived = true;
                 });
             }
             catch (Exception ex)
@@ -361,6 +392,7 @@ namespace Regulyators.UI.ViewModels
         private void OnConnectionStatusChanged(object sender, bool isConnected)
         {
             _isConnected = isConnected;
+            StatusMessage = isConnected ? "Подключено к оборудованию" : "Отключено от оборудования";
         }
 
         /// <summary>
@@ -410,6 +442,44 @@ namespace Regulyators.UI.ViewModels
         }
 
         /// <summary>
+        /// Генерация тестовых данных (для демонстрации)
+        /// </summary>
+        private void GenerateTestData()
+        {
+            Random random = new Random();
+
+            // Генерируем 60 точек (30 секунд с шагом 0.5 сек)
+            for (double time = 0; time < 30; time += 0.5)
+            {
+                // Генерируем реалистичные данные
+                double engineSpeed = 800 + 600 * Math.Sin(time / 5) + random.Next(-50, 50);
+                double turboSpeed = engineSpeed * 8 + random.Next(-400, 400);
+                double oilPressure = 2 + engineSpeed / 1500 + random.Next(-10, 10) / 10.0;
+                double boostPressure = 1 + engineSpeed / 2000 + random.Next(-10, 10) / 10.0;
+                double oilTemp = 80 + engineSpeed / 100 + random.Next(-5, 5);
+
+                // Добавляем точки
+                _graphService.AddDataPoint("Обороты двигателя", time, engineSpeed);
+                _graphService.AddDataPoint("Обороты турбокомпрессора", time, turboSpeed);
+                _graphService.AddDataPoint("Давление масла", time, oilPressure);
+                _graphService.AddDataPoint("Давление наддува", time, boostPressure);
+                _graphService.AddDataPoint("Температура масла", time, oilTemp);
+            }
+
+            // Устанавливаем время
+            _elapsedTime = 30;
+
+            // Отмечаем, что получили данные
+            _dataReceived = true;
+
+            // Обновляем график
+            UpdateGraph();
+
+            // Устанавливаем статус
+            StatusMessage = "Сгенерированы тестовые данные";
+        }
+
+        /// <summary>
         /// Очистка графика
         /// </summary>
         private void ClearGraph()
@@ -417,6 +487,7 @@ namespace Regulyators.UI.ViewModels
             // Очищаем все серии данных
             _graphService.ClearAllSeries();
             _elapsedTime = 0;
+            _dataReceived = false;
 
             // Обновляем график
             UpdateGraph();
@@ -561,10 +632,27 @@ namespace Regulyators.UI.ViewModels
             if (_mainPlot == null) return;
 
             // Автоматически настраиваем масштаб графика
-            _mainPlot.Plot.AxisAuto();
-            _mainPlot.Refresh();
-
-            StatusMessage = "Автоматическое масштабирование графика выполнено";
+            try
+            {
+                if (_dataReceived)
+                {
+                    _mainPlot.Plot.AxisAuto();
+                    _mainPlot.Refresh();
+                    StatusMessage = "Автоматическое масштабирование графика выполнено";
+                }
+                else
+                {
+                    // Устанавливаем разумные начальные границы
+                    _mainPlot.Plot.SetAxisLimits(0, 30, 0, 2500);
+                    _mainPlot.Refresh();
+                    StatusMessage = "Установлены начальные границы осей";
+                }
+            }
+            catch (Exception ex)
+            {
+                _loggingService.LogError("Ошибка масштабирования графика", ex.Message);
+                StatusMessage = "Ошибка масштабирования графика";
+            }
         }
 
         /// <summary>
@@ -576,6 +664,29 @@ namespace Regulyators.UI.ViewModels
 
             try
             {
+                // Если данных нет, показываем текст ожидания
+                if (!_dataReceived)
+                {
+                    _mainPlot.Plot.Clear();
+
+                    // Добавляем текст "Ожидание данных..." на график
+                    _mainPlot.Plot.AddText("Ожидание данных...", 0.5, 0.5,
+                        size: 24, color: System.Drawing.Color.Gray)
+                        .Alignment = ScottPlot.Alignment.MiddleCenter;
+
+                    // Устанавливаем начальные границы осей
+                    _mainPlot.Plot.SetAxisLimits(0, 30, 0, 2500);
+
+                    // Повторно инициализируем серии
+                    InitializeDataSeries();
+
+                    _mainPlot.Refresh();
+                    return;
+                }
+
+                // Очищаем текст "Ожидание данных..." если он был
+                _mainPlot.Plot.Clear(typeof(Text));
+
                 // Получаем данные для каждой серии
                 var seriesNames = new[]
                 {
@@ -601,7 +712,11 @@ namespace Regulyators.UI.ViewModels
                             var yData = seriesData.Select(p => p.Y).ToArray();
 
                             // Обновляем данные серии
-                            seriesPlot.Update(xData, yData);
+                            if (xData.Length > 0)
+                            {
+                                seriesPlot.Update(xData, yData);
+                                seriesPlot.IsVisible = true; // Делаем серию видимой
+                            }
                         }
                     }
                 }
@@ -621,6 +736,7 @@ namespace Regulyators.UI.ViewModels
             catch (Exception ex)
             {
                 _loggingService.LogError("Ошибка обновления графика", ex.Message);
+                StatusMessage = "Ошибка обновления графика: " + ex.Message;
             }
         }
 
@@ -635,23 +751,25 @@ namespace Regulyators.UI.ViewModels
             {
                 // Устанавливаем видимость серий в соответствии с настройками
                 if (_plotSeries.TryGetValue("Обороты двигателя", out var engineSpeedSeries))
-                    engineSpeedSeries.IsVisible = _showEngineSpeed;
+                    engineSpeedSeries.IsVisible = _showEngineSpeed && _dataReceived;
 
                 if (_plotSeries.TryGetValue("Обороты турбокомпрессора", out var turboSpeedSeries))
-                    turboSpeedSeries.IsVisible = _showTurboSpeed;
+                    turboSpeedSeries.IsVisible = _showTurboSpeed && _dataReceived;
 
                 if (_plotSeries.TryGetValue("Давление масла", out var oilPressureSeries))
-                    oilPressureSeries.IsVisible = _showOilPressure;
+                    oilPressureSeries.IsVisible = _showOilPressure && _dataReceived;
 
                 if (_plotSeries.TryGetValue("Давление наддува", out var boostPressureSeries))
-                    boostPressureSeries.IsVisible = _showBoostPressure;
+                    boostPressureSeries.IsVisible = _showBoostPressure && _dataReceived;
 
                 if (_plotSeries.TryGetValue("Температура масла", out var oilTemperatureSeries))
-                    oilTemperatureSeries.IsVisible = _showOilTemperature;
+                    oilTemperatureSeries.IsVisible = _showOilTemperature && _dataReceived;
 
-                // Обновляем легенду
-                _mainPlot.Plot.Legend();
-                _mainPlot.Refresh();
+                // Обновляем легенду только если есть данные
+                if (_dataReceived)
+                {
+                    _mainPlot.Plot.Legend();
+                }
             }
             catch (Exception ex)
             {
@@ -664,15 +782,14 @@ namespace Regulyators.UI.ViewModels
         /// </summary>
         private void UpdateTimeWindow()
         {
-            if (_mainPlot == null) return;
+            if (_mainPlot == null || !_dataReceived) return;
 
             try
             {
                 // Если выбран режим "Все", показываем все данные
                 if (_selectedTimeInterval == "Все")
                 {
-                    _mainPlot.Plot.AxisAuto();
-                    _mainPlot.Refresh();
+                    _mainPlot.Plot.AxisAutoX();
                     return;
                 }
 
@@ -687,8 +804,6 @@ namespace Regulyators.UI.ViewModels
 
                     // Корректируем границы по оси Y только если включен автомасштаб
                     _mainPlot.Plot.AxisAutoY();
-
-                    _mainPlot.Refresh();
                 }
             }
             catch (Exception ex)
@@ -702,7 +817,7 @@ namespace Regulyators.UI.ViewModels
         /// </summary>
         private void UpdateThresholdLines()
         {
-            if (_mainPlot == null) return;
+            if (_mainPlot == null || !_dataReceived) return;
 
             try
             {
@@ -751,8 +866,10 @@ namespace Regulyators.UI.ViewModels
                 }
 
                 // Обновляем легенду
-                _mainPlot.Plot.Legend();
-                _mainPlot.Refresh();
+                if (_dataReceived)
+                {
+                    _mainPlot.Plot.Legend();
+                }
             }
             catch (Exception ex)
             {

@@ -35,6 +35,10 @@
                 <views:LoggingView />
             </DataTemplate>
 
+            <DataTemplate DataType="{x:Type viewmodels:ImprovedChartViewModel}">
+                <views:ImprovedChartView />
+            </DataTemplate>
+
             <!-- Шаблоны для защит и настроек -->
             <DataTemplate DataType="{x:Type viewmodels:ProtectionSystemViewModel}">
                 <views:ProtectionSystemView />
