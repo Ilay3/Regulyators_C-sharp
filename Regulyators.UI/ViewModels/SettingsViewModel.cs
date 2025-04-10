@@ -303,6 +303,28 @@ namespace Regulyators.UI.ViewModels
             _selectedStopBits = _comPortSettings.StopBits;
             _selectedParity = _comPortSettings.Parity;
 
+            // Проверка соответствия настроек протоколу ERCHM30TZProtocol
+            if (_selectedStopBits != StopBits.Two)
+            {
+                _loggingService.LogWarning("Стоповые биты не соответствуют протоколу, устанавливаем StopBits.Two");
+                _selectedStopBits = StopBits.Two;
+                _comPortSettings.StopBits = StopBits.Two;
+            }
+
+            if (_selectedParity != Parity.Odd)
+            {
+                _loggingService.LogWarning("Четность не соответствует протоколу, устанавливаем Parity.Odd");
+                _selectedParity = Parity.Odd;
+                _comPortSettings.Parity = Parity.Odd;
+            }
+
+            if (_selectedBaudRate != 9600)
+            {
+                _loggingService.LogWarning("Скорость передачи не соответствует протоколу, устанавливаем 9600");
+                _selectedBaudRate = 9600;
+                _comPortSettings.BaudRate = 9600;
+            }
+
             // Проверка активности соединения
             IsConnectionActive = _comPortService.IsConnected;
 
@@ -329,6 +351,7 @@ namespace Regulyators.UI.ViewModels
 
             _loggingService.LogInfo("Модуль настроек инициализирован");
         }
+
 
         /// <summary>
         /// Обработчик изменения статуса подключения

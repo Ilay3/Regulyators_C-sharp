@@ -30,6 +30,15 @@ namespace Regulyators.UI.Views
                     DataContext = _viewModel;
                     _viewModel.InitializeGraph(MainPlot);
                 }
+
+                // При изменении размера обновляем график
+                MainPlot.SizeChanged += (sender, args) =>
+                {
+                    if (_viewModel != null)
+                    {
+                        MainPlot.Refresh();
+                    }
+                };
             };
 
             // Обработчик выгрузки контрола

@@ -160,11 +160,13 @@ namespace Regulyators.UI.Services
         /// </summary>
         public void SimulateDataReceived(EngineParameters parameters)
         {
-            if (_isSimulationMode && _isConnected)
+            if (_isSimulationMode)
             {
                 try
                 {
+                    // Всегда вызываем событие в режиме симуляции
                     DataReceived?.Invoke(this, parameters);
+                    _loggingService.LogInfo($"Симуляция: отправлены данные (Обороты={parameters.EngineSpeed}, Давление масла={parameters.OilPressure})");
                 }
                 catch (Exception ex)
                 {
@@ -1218,9 +1220,9 @@ namespace Regulyators.UI.Services
             // Реализация пакета в соответствии с требованиями протокола ЭРЧМ30ТЗ
             List<byte> packet = new List<byte>();
 
-            // Константы протокола
-            const byte SYNC_START = 255; // Признак начала пакета (0xFF)
-            const byte SYNC_2 = 254;     // Байт для byte-stuffing (0xFE)
+            // Константы протокола из ERCHM30TZProtocol
+            byte SYNC_START = ERCHM30TZProtocol.SYNC_START;
+            byte SYNC_2 = ERCHM30TZProtocol.SYNC_2;
 
             // Маркер начала пакета
             packet.Add(SYNC_START);
@@ -1237,8 +1239,10 @@ namespace Regulyators.UI.Services
                 case CommandType.SetEngineSpeed:
                     // Задание частоты вращения (два байта: старший и младший)
                     ushort speedValue = (ushort)command.EngineSpeed;
-                    dataField.Add((byte)(speedValue >> 8));   // Старший байт (F_z_h)
-                    dataField.Add((byte)(speedValue & 0xFF)); // Младший байт (F_z_l)
+                    var speedBytes = ERCHM30TZProtocol.UInt16ToBytes(speedValue);
+
+                    dataField.Add(speedBytes.HighByte);   // Старший байт (F_z_h)
+                    dataField.Add(speedBytes.LowByte);    // Младший байт (F_z_l)
                     dataField.Add(0); // Признак поездного режима (POWER): 0 = холостой ход
                     dataField.Add(1); // Признак запуска/стопа (Pusk): 1 = РАБОТА
                     dataField.Add(0); // Резерв
@@ -1268,7 +1272,18 @@ namespace Regulyators.UI.Services
                     dataField.Add(0); // Резерв
                     break;
 
-                    // [Другие команды]
+                case CommandType.GetProtectionStatus:
+                    // Запрос статуса защит - дополнительные данные не требуются
+                    break;
+
+                case CommandType.ResetProtection:
+                    // Команда сброса защит - в зависимости от протокола может требовать данные
+                    dataField.Add(0xFF); // Специальный флаг для сброса защит
+                    break;
+
+                default:
+                    _loggingService.LogWarning($"Неизвестная команда: {command.CommandType}");
+                    break;
             }
 
             // Байт команды COM
@@ -1294,15 +1309,8 @@ namespace Regulyators.UI.Services
                 }
             }
 
-            // Вычисляем контрольную сумму (байт CS)
-            // Сумма всех байт пакета по модулю 256, взятая с обратным знаком
-            // не включая SYNC_START
-            int sum = 0;
-            for (int i = 1; i < packet.Count; i++)
-            {
-                sum += packet[i];
-            }
-            byte checksum = (byte)(256 - (sum % 256));
+            // Вычисляем контрольную сумму по алгоритму протокола
+            byte checksum = ERCHM30TZProtocol.CalculateChecksum(packet);
             packet.Add(checksum);
 
             _loggingService.LogInfo($"Сформирован пакет для команды {command.CommandType}, длина: {packet.Count} байт");

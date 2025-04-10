@@ -129,11 +129,14 @@
 
                         <ComboBox 
                             Grid.Column="1" 
-                            VerticalAlignment="Center"
-                            SelectedItem="{Binding ComPortSettings.StopBits, Converter={StaticResource EnumToStringConverter}}">
-                            <ComboBoxItem Content="1"/>
-                            <ComboBoxItem Content="1.5"/>
-                            <ComboBoxItem Content="2"/>
+                            ItemsSource="{Binding StopBitsList}"
+                            SelectedItem="{Binding SelectedStopBits}"
+                            VerticalAlignment="Center">
+                            <ComboBox.ItemTemplate>
+                                <DataTemplate>
+                                    <TextBlock Text="{Binding Converter={StaticResource EnumToStringConverter}}"/>
+                                </DataTemplate>
+                            </ComboBox.ItemTemplate>
                         </ComboBox>
                     </Grid>
 
@@ -151,15 +154,17 @@
 
                         <ComboBox 
                             Grid.Column="1" 
-                            VerticalAlignment="Center"
-                            SelectedItem="{Binding ComPortSettings.Parity, Converter={StaticResource EnumToStringConverter}}">
-                            <ComboBoxItem Content="Нет"/>
-                            <ComboBoxItem Content="Четные"/>
-                            <ComboBoxItem Content="Нечетные"/>
-                            <ComboBoxItem Content="Маркер"/>
-                            <ComboBoxItem Content="Пробел"/>
+                            ItemsSource="{Binding ParityList}"
+                            SelectedItem="{Binding SelectedParity}"
+                            VerticalAlignment="Center">
+                            <ComboBox.ItemTemplate>
+                                <DataTemplate>
+                                    <TextBlock Text="{Binding Converter={StaticResource EnumToStringConverter}}"/>
+                                </DataTemplate>
+                            </ComboBox.ItemTemplate>
                         </ComboBox>
                     </Grid>
+
 
                     <!-- Таймауты -->
                     <Expander Header="Расширенные настройки" Margin="0,16,0,0">

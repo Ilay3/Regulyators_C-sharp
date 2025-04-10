@@ -1,6 +1,5 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
 using System.Windows;
@@ -21,7 +20,6 @@ namespace Regulyators.UI.ViewModels
     public class ImprovedChartViewModel : ViewModelBase
     {
         private readonly LoggingService _loggingService;
-        private readonly GraphService _graphService;
         private readonly ComPortService _comPortService;
         private readonly SettingsService _settingsService;
 
@@ -32,8 +30,14 @@ namespace Regulyators.UI.ViewModels
         private bool _isConnected = false;
         private string _statusMessage;
         private bool _dataReceived = false;
+        private bool _autoScroll = true;
+        private DateTime _lastRefreshTime = DateTime.Now;
+
+        // Максимальное количество точек для хранения
+        private const int MAX_POINTS = 3600; // 1 час при частоте обновления 1 раз в секунду
 
         // Словарь для хранения серий данных графика
+        private Dictionary<string, List<DataPoint>> _dataPoints = new Dictionary<string, List<DataPoint>>();
         private Dictionary<string, ScatterPlot> _plotSeries = new Dictionary<string, ScatterPlot>();
 
         // Цвета для серий данных
@@ -63,6 +67,24 @@ namespace Regulyators.UI.ViewModels
         {
             get => _engineParameters;
             set => SetProperty(ref _engineParameters, value);
+        }
+
+        /// <summary>
+        /// Автоматическая прокрутка графика
+        /// </summary>
+        public bool AutoScroll
+        {
+            get => _autoScroll;
+            set
+            {
+                if (SetProperty(ref _autoScroll, value))
+                {
+                    if (value)
+                    {
+                        UpdateTimeWindow();
+                    }
+                }
+            }
         }
 
         /// <summary>
@@ -206,16 +228,14 @@ namespace Regulyators.UI.ViewModels
         public ImprovedChartViewModel()
         {
             _loggingService = LoggingService.Instance;
-            _graphService = GraphService.Instance;
             _comPortService = ComPortService.Instance;
             _settingsService = SettingsService.Instance;
 
-            // Инициализация серий данных для графика
-            _graphService.InitSeries("Обороты двигателя", 1200);  // Увеличиваем размер буфера для хранения больше точек
-            _graphService.InitSeries("Обороты турбокомпрессора", 1200);
-            _graphService.InitSeries("Давление масла", 1200);
-            _graphService.InitSeries("Давление наддува", 1200);
-            _graphService.InitSeries("Температура масла", 1200);
+            // Инициализация словаря для хранения данных серий
+            foreach (var series in _seriesColors.Keys)
+            {
+                _dataPoints[series] = new List<DataPoint>();
+            }
 
             // Инициализация параметров двигателя
             EngineParameters = new EngineParameters
@@ -253,8 +273,7 @@ namespace Regulyators.UI.ViewModels
             _isConnected = _comPortService.IsConnected;
             StatusMessage = _isConnected ? "Подключено к оборудованию" : "Ожидание подключения к оборудованию...";
 
-            // Логирование
-            _loggingService.LogInfo("Запущен модуль графиков двигателя");
+            _loggingService.LogInfo("График инициализирован и готов к получению данных");
         }
 
         /// <summary>
@@ -270,22 +289,25 @@ namespace Regulyators.UI.ViewModels
             {
                 try
                 {
-                    // Включаем интерактивное управление графиком
+                    // Включаем интерактивность
                     _mainPlot.Configuration.DoubleClickBenchmark = false;
-                    _mainPlot.Configuration.LeftClickDragPan = true;  // Включаем панорамирование
-                    _mainPlot.Configuration.RightClickDragZoom = true; // Включаем масштабирование
-                    _mainPlot.Configuration.ScrollWheelZoom = true;   // Включаем масштабирование колесиком
-                    _mainPlot.Configuration.LockVerticalAxis = false; // Разблокируем вертикальную ось
+                    _mainPlot.Configuration.LeftClickDragPan = true;
+                    _mainPlot.Configuration.RightClickDragZoom = true;
+                    _mainPlot.Configuration.ScrollWheelZoom = true;
+                    _mainPlot.Configuration.LockVerticalAxis = false;
+
+                    // При нажатии на кнопку или прокрутке колеса, отключаем автоскролл
+                    _mainPlot.MouseDown += (sender, e) => AutoScroll = false;
+                    _mainPlot.MouseWheel += (sender, e) => AutoScroll = false;
 
                     // Настройка внешнего вида
                     _mainPlot.Plot.Style(ScottPlot.Style.Seaborn);
-                    _mainPlot.Plot.Title("Параметры двигателя");
+                    _mainPlot.Plot.Title("Параметры двигателя", bold: true);
                     _mainPlot.Plot.XLabel("Время (сек)");
                     _mainPlot.Plot.YLabel("Значение");
                     _mainPlot.Plot.XAxis.TickLabelStyle(fontSize: 12);
                     _mainPlot.Plot.YAxis.TickLabelStyle(fontSize: 12);
                     _mainPlot.Plot.Legend(location: Alignment.UpperRight);
-
 
                     // Добавляем текст "Ожидание данных..." на график
                     _mainPlot.Plot.AddText("Ожидание данных...", 0.5, 0.5,
@@ -298,8 +320,13 @@ namespace Regulyators.UI.ViewModels
                     // Создаем серии данных для графика
                     InitializeDataSeries();
 
+                    // Задаем обработчик изменения размера графика
+                    _mainPlot.SizeChanged += (sender, e) => RefreshPlot();
+
                     // Обновляем график
-                    UpdateGraph();
+                    RefreshPlot();
+
+                    _loggingService.LogInfo("График успешно инициализирован");
                 }
                 catch (Exception ex)
                 {
@@ -318,26 +345,46 @@ namespace Regulyators.UI.ViewModels
 
             try
             {
+                // Очищаем существующие серии
+                _plotSeries.Clear();
+                _mainPlot.Plot.Clear();
+
                 // Создаем и настраиваем серии данных
                 foreach (var series in _seriesColors)
                 {
                     string seriesName = series.Key;
                     Color color = series.Value;
 
-                    // Создаем начальные массивы с одной точкой (чтобы избежать ошибки пустых массивов)
-                    var xData = new double[] { 0 };
-                    var yData = new double[] { 0 };
+                    // Преобразуем цвет WPF в цвет System.Drawing
+                    var drawingColor = System.Drawing.Color.FromArgb(
+                        color.A, color.R, color.G, color.B);
+
+                    // Создаем массивы данных
+                    double[] xData = new double[0];
+                    double[] yData = new double[0];
+
+                    // Получаем данные из хранилища, если они есть
+                    if (_dataPoints.TryGetValue(seriesName, out var points) && points.Count > 0)
+                    {
+                        xData = points.Select(p => p.X).ToArray();
+                        yData = points.Select(p => p.Y).ToArray();
+                    }
 
                     // Создаем серию на графике
                     var seriesPlot = _mainPlot.Plot.AddScatter(
                         xData,
                         yData,
-                        System.Drawing.Color.FromArgb(color.A, color.R, color.G, color.B),
-                        label: seriesName);
+                        drawingColor,
+                        label: seriesName,
+                        markerSize: 0);  // Отключаем маркеры для лучшей производительности
 
                     seriesPlot.LineWidth = 2;
-                    seriesPlot.MarkerSize = 0; // Без маркеров для лучшей производительности
-                    seriesPlot.IsVisible = false; // Начально скрываем все серии
+
+                    // Устанавливаем стартовую видимость серии
+                    bool isVisible = seriesName == "Обороты двигателя" ||
+                                    seriesName == "Давление масла" ||
+                                    seriesName == "Температура масла";
+                    seriesPlot.IsVisible = isVisible;
 
                     // Сохраняем серию в словаре
                     _plotSeries[seriesName] = seriesPlot;
@@ -345,10 +392,12 @@ namespace Regulyators.UI.ViewModels
 
                 // Обновляем легенду
                 _mainPlot.Plot.Legend();
+
+                _loggingService.LogInfo("Серии данных для графика инициализированы");
             }
             catch (Exception ex)
             {
-                _loggingService.LogError("Ошибка при инициализации серий данных", ex.Message);
+                _loggingService.LogError("Ошибка инициализации серий данных", ex.Message);
             }
         }
 
@@ -359,7 +408,13 @@ namespace Regulyators.UI.ViewModels
         {
             try
             {
-                // Обновляем значения параметров
+                // Проверка на нулевые данные
+                if (parameters == null)
+                {
+                    _loggingService.LogWarning("Получены нулевые данные", "OnDataReceived");
+                    return;
+                }
+
                 Application.Current.Dispatcher.Invoke(() =>
                 {
                     // Обновляем параметры двигателя
@@ -371,19 +426,54 @@ namespace Regulyators.UI.ViewModels
                     EngineParameters.RackPosition = parameters.RackPosition;
                     EngineParameters.Timestamp = parameters.Timestamp;
 
-                    // Добавляем данные на график
-                    AddDataToGraph();
+                    // Добавляем новую точку на график
+                    _elapsedTime += 0.5; // Увеличиваем на 0.5 сек
 
-                    // Обновляем статус
-                    StatusMessage = $"Данные обновлены: {parameters.Timestamp:HH:mm:ss}";
+                    // Добавляем данные в коллекции точек
+                    AddDataPoint("Обороты двигателя", _elapsedTime, parameters.EngineSpeed);
+                    AddDataPoint("Обороты турбокомпрессора", _elapsedTime, parameters.TurboCompressorSpeed);
+                    AddDataPoint("Давление масла", _elapsedTime, parameters.OilPressure);
+                    AddDataPoint("Давление наддува", _elapsedTime, parameters.BoostPressure);
+                    AddDataPoint("Температура масла", _elapsedTime, parameters.OilTemperature);
 
                     // Отмечаем, что получили данные
                     _dataReceived = true;
+
+                    // Обновляем график (но не слишком часто)
+                    var now = DateTime.Now;
+                    if ((now - _lastRefreshTime).TotalMilliseconds > 500) // Не чаще 2 раз в секунду
+                    {
+                        _lastRefreshTime = now;
+                        UpdatePlot();
+                    }
+
+                    // Обновляем статус
+                    StatusMessage = $"Данные обновлены: {parameters.Timestamp:HH:mm:ss}, Обороты: {parameters.EngineSpeed:F0}, Масло: {parameters.OilPressure:F2}";
                 });
             }
             catch (Exception ex)
             {
                 _loggingService.LogError("Ошибка обработки полученных данных", ex.Message);
+            }
+        }
+
+        /// <summary>
+        /// Добавление точки данных в коллекцию серии
+        /// </summary>
+        private void AddDataPoint(string seriesName, double x, double y)
+        {
+            if (!_dataPoints.ContainsKey(seriesName))
+            {
+                _dataPoints[seriesName] = new List<DataPoint>();
+            }
+
+            // Добавляем новую точку
+            _dataPoints[seriesName].Add(new DataPoint { X = x, Y = y });
+
+            // Ограничиваем количество точек для предотвращения переполнения памяти
+            if (_dataPoints[seriesName].Count > MAX_POINTS)
+            {
+                _dataPoints[seriesName].RemoveAt(0);
             }
         }
 
@@ -425,241 +515,61 @@ namespace Regulyators.UI.ViewModels
         }
 
         /// <summary>
-        /// Добавление данных на график
-        /// </summary>
-        private void AddDataToGraph()
-        {
-            _elapsedTime += 0.5; // Прирост 0.5 сек
-
-            // Добавляем новые точки в сервис графиков
-            _graphService.AddDataPoint("Обороты двигателя", _elapsedTime, EngineParameters.EngineSpeed);
-            _graphService.AddDataPoint("Обороты турбокомпрессора", _elapsedTime, EngineParameters.TurboCompressorSpeed);
-            _graphService.AddDataPoint("Давление масла", _elapsedTime, EngineParameters.OilPressure);
-            _graphService.AddDataPoint("Давление наддува", _elapsedTime, EngineParameters.BoostPressure);
-            _graphService.AddDataPoint("Температура масла", _elapsedTime, EngineParameters.OilTemperature);
-
-            // Обновляем график
-            UpdateGraph();
-        }
-
-        /// <summary>
         /// Генерация тестовых данных (для демонстрации)
         /// </summary>
         private void GenerateTestData()
         {
-            Random random = new Random();
-
-            // Генерируем 60 точек (30 секунд с шагом 0.5 сек)
-            for (double time = 0; time < 30; time += 0.5)
-            {
-                // Генерируем реалистичные данные
-                double engineSpeed = 800 + 600 * Math.Sin(time / 5) + random.Next(-50, 50);
-                double turboSpeed = engineSpeed * 8 + random.Next(-400, 400);
-                double oilPressure = 2 + engineSpeed / 1500 + random.Next(-10, 10) / 10.0;
-                double boostPressure = 1 + engineSpeed / 2000 + random.Next(-10, 10) / 10.0;
-                double oilTemp = 80 + engineSpeed / 100 + random.Next(-5, 5);
-
-                // Добавляем точки
-                _graphService.AddDataPoint("Обороты двигателя", time, engineSpeed);
-                _graphService.AddDataPoint("Обороты турбокомпрессора", time, turboSpeed);
-                _graphService.AddDataPoint("Давление масла", time, oilPressure);
-                _graphService.AddDataPoint("Давление наддува", time, boostPressure);
-                _graphService.AddDataPoint("Температура масла", time, oilTemp);
-            }
-
-            // Устанавливаем время
-            _elapsedTime = 30;
-
-            // Отмечаем, что получили данные
-            _dataReceived = true;
-
-            // Обновляем график
-            UpdateGraph();
-
-            // Устанавливаем статус
-            StatusMessage = "Сгенерированы тестовые данные";
-        }
-
-        /// <summary>
-        /// Очистка графика
-        /// </summary>
-        private void ClearGraph()
-        {
-            // Очищаем все серии данных
-            _graphService.ClearAllSeries();
-            _elapsedTime = 0;
-            _dataReceived = false;
-
-            // Обновляем график
-            UpdateGraph();
-
-            // Логирование
-            _loggingService.LogInfo("График параметров очищен");
-            StatusMessage = "График очищен";
-        }
-
-        /// <summary>
-        /// Экспорт графика в файл
-        /// </summary>
-        private void ExportGraph(string format)
-        {
-            if (_mainPlot != null)
-            {
-                try
-                {
-                    // Создаем диалог сохранения файла
-                    var dialog = new SaveFileDialog
-                    {
-                        DefaultExt = $".{format.ToLower()}",
-                        Filter = $"{format} Image (*.{format.ToLower()})|*.{format.ToLower()}|All Files (*.*)|*.*",
-                        Title = "Сохранить график"
-                    };
-
-                    // Если пользователь выбрал файл
-                    if (dialog.ShowDialog() == true)
-                    {
-                        // Сохраняем график в файл
-                        _mainPlot.Plot.SaveFig(dialog.FileName);
-                        _loggingService.LogInfo($"График сохранен в файл {format}", dialog.FileName);
-                        StatusMessage = $"График сохранен в файл {format}";
-                    }
-                }
-                catch (Exception ex)
-                {
-                    _loggingService.LogError("Ошибка при экспорте графика", ex.Message);
-                    StatusMessage = "Ошибка при экспорте графика";
-                }
-            }
-            else
-            {
-                _loggingService.LogWarning("Экспорт графика невозможен", "График не инициализирован");
-                StatusMessage = "Экспорт графика невозможен: график не инициализирован";
-            }
-        }
-
-        /// <summary>
-        /// Экспорт данных в CSV-файл
-        /// </summary>
-        private void ExportData()
-        {
             try
             {
-                // Создаем диалог сохранения файла
-                var dialog = new SaveFileDialog
+                Random random = new Random();
+
+                // Очищаем старые данные
+                ClearGraph();
+
+                // Генерируем 600 точек (300 секунд с шагом 0.5 сек)
+                for (double time = 0; time < 300; time += 0.5)
                 {
-                    DefaultExt = ".csv",
-                    Filter = "CSV Files (*.csv)|*.csv|All Files (*.*)|*.*",
-                    Title = "Экспорт данных графика"
-                };
+                    _elapsedTime = time;
 
-                // Если пользователь выбрал файл
-                if (dialog.ShowDialog() == true)
-                {
-                    // Здесь используем сервис экспорта
-                    var exportService = ExportService.Instance;
-                    var data = GetDataForExport();
+                    // Генерируем реалистичные данные
+                    double engineSpeed = 800 + 600 * Math.Sin(time / 20) + random.Next(-50, 50);
+                    double turboSpeed = engineSpeed * 8 + random.Next(-400, 400);
+                    double oilPressure = 2 + engineSpeed / 1500 + random.Next(-10, 10) / 10.0;
+                    double boostPressure = 1 + engineSpeed / 2000 + random.Next(-10, 10) / 10.0;
+                    double oilTemp = 80 + engineSpeed / 100 + random.Next(-5, 5);
 
-                    // Создаем CSV-файл вручную, с корректным форматированием
-                    using (var writer = new StreamWriter(dialog.FileName, false, System.Text.Encoding.UTF8))
-                    {
-                        // Записываем заголовки колонок
-                        writer.WriteLine("Время;Обороты двигателя;Обороты турбокомпрессора;Давление масла;Давление наддува;Температура масла");
-
-                        // Записываем данные
-                        foreach (var row in data)
-                        {
-                            writer.WriteLine(string.Format(
-                                "{0};{1};{2};{3};{4};{5}",
-                                row.Time.ToString("0.0", System.Globalization.CultureInfo.InvariantCulture),
-                                row.EngineSpeed.ToString("0", System.Globalization.CultureInfo.InvariantCulture),
-                                row.TurboCompressorSpeed.ToString("0", System.Globalization.CultureInfo.InvariantCulture),
-                                row.OilPressure.ToString("0.00", System.Globalization.CultureInfo.InvariantCulture),
-                                row.BoostPressure.ToString("0.00", System.Globalization.CultureInfo.InvariantCulture),
-                                row.OilTemperature.ToString("0.0", System.Globalization.CultureInfo.InvariantCulture)
-                            ));
-                        }
-                    }
-
-                    _loggingService.LogInfo("Данные графика экспортированы в CSV", dialog.FileName);
-                    StatusMessage = "Данные экспортированы в CSV";
+                    // Добавляем данные в коллекции точек
+                    AddDataPoint("Обороты двигателя", time, engineSpeed);
+                    AddDataPoint("Обороты турбокомпрессора", time, turboSpeed);
+                    AddDataPoint("Давление масла", time, oilPressure);
+                    AddDataPoint("Давление наддува", time, boostPressure);
+                    AddDataPoint("Температура масла", time, oilTemp);
                 }
+
+                // Отмечаем, что получили данные
+                _dataReceived = true;
+
+                // Обновляем график
+                UpdatePlot();
+
+                // Включаем автопрокрутку и обновляем окно просмотра
+                AutoScroll = true;
+                UpdateTimeWindow();
+
+                StatusMessage = "Сгенерированы тестовые данные";
+                _loggingService.LogInfo("Сгенерированы тестовые данные для графика");
             }
             catch (Exception ex)
             {
-                _loggingService.LogError("Ошибка при экспорте данных", ex.Message);
-                StatusMessage = "Ошибка при экспорте данных";
-            }
-        }
-
-        /// <summary>
-        /// Подготовка данных для экспорта
-        /// </summary>
-        private List<ChartDataPoint> GetDataForExport()
-        {
-            var result = new List<ChartDataPoint>();
-
-            // Получаем данные из сервиса графиков
-            var engineSpeedSeries = _graphService.GetSeriesData("Обороты двигателя");
-            var turboSpeedSeries = _graphService.GetSeriesData("Обороты турбокомпрессора");
-            var oilPressureSeries = _graphService.GetSeriesData("Давление масла");
-            var boostPressureSeries = _graphService.GetSeriesData("Давление наддува");
-            var oilTemperatureSeries = _graphService.GetSeriesData("Температура масла");
-
-            // Определяем максимальное количество точек
-            int maxPoints = engineSpeedSeries.Count;
-
-            // Заполняем результат
-            for (int i = 0; i < maxPoints; i++)
-            {
-                result.Add(new ChartDataPoint
-                {
-                    Time = engineSpeedSeries.Count > i ? engineSpeedSeries[i].X : 0,
-                    EngineSpeed = engineSpeedSeries.Count > i ? engineSpeedSeries[i].Y : 0,
-                    TurboCompressorSpeed = turboSpeedSeries.Count > i ? turboSpeedSeries[i].Y : 0,
-                    OilPressure = oilPressureSeries.Count > i ? oilPressureSeries[i].Y : 0,
-                    BoostPressure = boostPressureSeries.Count > i ? boostPressureSeries[i].Y : 0,
-                    OilTemperature = oilTemperatureSeries.Count > i ? oilTemperatureSeries[i].Y : 0
-                });
-            }
-
-            return result;
-        }
-
-        /// <summary>
-        /// Автоматическое масштабирование графика
-        /// </summary>
-        private void AutoScale()
-        {
-            if (_mainPlot == null) return;
-
-            // Автоматически настраиваем масштаб графика
-            try
-            {
-                if (_dataReceived)
-                {
-                    _mainPlot.Plot.AxisAuto();
-                    _mainPlot.Refresh();
-                    StatusMessage = "Автоматическое масштабирование графика выполнено";
-                }
-                else
-                {
-                    // Устанавливаем разумные начальные границы
-                    _mainPlot.Plot.SetAxisLimits(0, 30, 0, 2500);
-                    _mainPlot.Refresh();
-                    StatusMessage = "Установлены начальные границы осей";
-                }
-            }
-            catch (Exception ex)
-            {
-                _loggingService.LogError("Ошибка масштабирования графика", ex.Message);
-                StatusMessage = "Ошибка масштабирования графика";
+                _loggingService.LogError("Ошибка при генерации тестовых данных", ex.Message);
+                StatusMessage = $"Ошибка: {ex.Message}";
             }
         }
 
         /// <summary>
         /// Обновление графика
         /// </summary>
-        private void UpdateGraph()
+        private void UpdatePlot()
         {
             if (!_isGraphInitialized || _mainPlot == null) return;
 
@@ -668,76 +578,43 @@ namespace Regulyators.UI.ViewModels
                 // Если данных нет, показываем текст ожидания
                 if (!_dataReceived)
                 {
-                    _mainPlot.Plot.Clear();
-
-                    // Добавляем текст "Ожидание данных..." на график
-                    _mainPlot.Plot.AddText("Ожидание данных...", 0.5, 0.5,
-                        size: 24, color: System.Drawing.Color.Gray)
-                        .Alignment = ScottPlot.Alignment.MiddleCenter;
-
-                    // Устанавливаем начальные границы осей
-                    _mainPlot.Plot.SetAxisLimits(0, 30, 0, 2500);
-
-                    // Повторно инициализируем серии
-                    InitializeDataSeries();
-
-                    _mainPlot.Refresh();
                     return;
                 }
 
-                // Очищаем текст "Ожидание данных..." если он был
-                _mainPlot.Plot.Clear(typeof(Text));
-
-                // Получаем данные для каждой серии
-                var seriesNames = new[]
-                {
-                    "Обороты двигателя",
-                    "Обороты турбокомпрессора",
-                    "Давление масла",
-                    "Давление наддува",
-                    "Температура масла"
-                };
-
                 // Обновляем данные для каждой серии
-                foreach (var seriesName in seriesNames)
+                foreach (var seriesName in _seriesColors.Keys)
                 {
-                    if (_plotSeries.TryGetValue(seriesName, out var seriesPlot))
+                    if (_plotSeries.TryGetValue(seriesName, out var seriesPlot) &&
+                        _dataPoints.TryGetValue(seriesName, out var points) &&
+                        points.Count > 0)
                     {
-                        // Получаем данные из сервиса
-                        var seriesData = _graphService.GetSeriesData(seriesName);
+                        // Преобразуем точки в массивы x и y
+                        double[] xData = points.Select(p => p.X).ToArray();
+                        double[] yData = points.Select(p => p.Y).ToArray();
 
-                        if (seriesData.Count > 0)
-                        {
-                            // Преобразуем данные в массивы для ScottPlot
-                            var xData = seriesData.Select(p => p.X).ToArray();
-                            var yData = seriesData.Select(p => p.Y).ToArray();
-
-                            // Обновляем данные серии
-                            if (xData.Length > 0)
-                            {
-                                seriesPlot.Update(xData, yData);
-                                seriesPlot.IsVisible = true; // Делаем серию видимой
-                            }
-                        }
+                        // Обновляем данные серии
+                        seriesPlot.Update(xData, yData);
                     }
                 }
 
-                // Обновляем видимость серий
+                // Обновляем видимость серий в соответствии с настройками
                 UpdateVisibleSeries();
-
-                // Устанавливаем временное окно
-                UpdateTimeWindow();
 
                 // Обновляем линии порогов защит
                 UpdateThresholdLines();
 
+                // Обновляем окно просмотра, если включен автоскролл
+                if (_autoScroll)
+                {
+                    UpdateTimeWindow();
+                }
+
                 // Обновляем график
-                _mainPlot.Refresh();
+                RefreshPlot();
             }
             catch (Exception ex)
             {
                 _loggingService.LogError("Ошибка обновления графика", ex.Message);
-                StatusMessage = "Ошибка обновления графика: " + ex.Message;
             }
         }
 
@@ -771,6 +648,9 @@ namespace Regulyators.UI.ViewModels
                 {
                     _mainPlot.Plot.Legend();
                 }
+
+                // Обновляем график
+                RefreshPlot();
             }
             catch (Exception ex)
             {
@@ -787,25 +667,28 @@ namespace Regulyators.UI.ViewModels
 
             try
             {
-                // Если выбран режим "Все", показываем все данные
-                if (_selectedTimeInterval == "Все")
+                // Если включена автопрокрутка и есть данные
+                if (_autoScroll)
                 {
-                    _mainPlot.Plot.AxisAutoX();
-                    return;
+                    // Если выбран режим "Все", показываем все данные
+                    if (_selectedTimeInterval == "Все")
+                    {
+                        _mainPlot.Plot.AxisAutoX();
+                        _mainPlot.Plot.AxisAutoY();
+                    }
+                    else if (int.TryParse(_selectedTimeInterval, out int seconds))
+                    {
+                        // Устанавливаем видимый диапазон по оси X
+                        double minX = Math.Max(0, _elapsedTime - seconds);
+                        double maxX = Math.Max(seconds, _elapsedTime);
+
+                        _mainPlot.Plot.SetAxisLimitsX(minX, maxX);
+                        _mainPlot.Plot.AxisAutoY();
+                    }
                 }
 
-                // Если указан числовой интервал, ограничиваем видимую область
-                if (int.TryParse(_selectedTimeInterval, out int seconds))
-                {
-                    // Устанавливаем видимый диапазон по оси X
-                    double minX = Math.Max(0, _elapsedTime - seconds);
-                    double maxX = Math.Max(seconds, _elapsedTime);
-
-                    _mainPlot.Plot.SetAxisLimitsX(minX, maxX);
-
-                    // Корректируем границы по оси Y только если включен автомасштаб
-                    _mainPlot.Plot.AxisAutoY();
-                }
+                // Обновляем график
+                RefreshPlot();
             }
             catch (Exception ex)
             {
@@ -828,53 +711,278 @@ namespace Regulyators.UI.ViewModels
                 // Добавляем линии порогов защит, если соответствующие серии видимы
                 if (_showEngineSpeed)
                 {
-                    var line = _mainPlot.Plot.AddHorizontalLine(
+                    _mainPlot.Plot.AddHorizontalLine(
                         EngineParameters.EngineSpeedCriticalThreshold,
                         System.Drawing.Color.FromArgb(128, 255, 0, 0), // Полупрозрачный красный
                         1.5f,
-                        LineStyle.Dash);
-                    line.Label = "Макс. обороты";
+                        LineStyle.Dash,
+                        "Макс. обороты");
                 }
 
                 if (_showOilPressure)
                 {
-                    var line = _mainPlot.Plot.AddHorizontalLine(
+                    _mainPlot.Plot.AddHorizontalLine(
                         EngineParameters.OilPressureCriticalThreshold,
                         System.Drawing.Color.FromArgb(128, 255, 0, 0),
                         1.5f,
-                        LineStyle.Dash);
-                    line.Label = "Мин. давление масла";
+                        LineStyle.Dash,
+                        "Мин. давление масла");
                 }
 
                 if (_showBoostPressure)
                 {
-                    var line = _mainPlot.Plot.AddHorizontalLine(
+                    _mainPlot.Plot.AddHorizontalLine(
                         EngineParameters.BoostPressureCriticalThreshold,
                         System.Drawing.Color.FromArgb(128, 255, 0, 0),
                         1.5f,
-                        LineStyle.Dash);
-                    line.Label = "Макс. давление наддува";
+                        LineStyle.Dash,
+                        "Макс. давление наддува");
                 }
 
                 if (_showOilTemperature)
                 {
-                    var line = _mainPlot.Plot.AddHorizontalLine(
+                    _mainPlot.Plot.AddHorizontalLine(
                         EngineParameters.OilTemperatureCriticalThreshold,
                         System.Drawing.Color.FromArgb(128, 255, 0, 0),
                         1.5f,
-                        LineStyle.Dash);
-                    line.Label = "Макс. температура масла";
-                }
-
-                // Обновляем легенду
-                if (_dataReceived)
-                {
-                    _mainPlot.Plot.Legend();
+                        LineStyle.Dash,
+                        "Макс. температура масла");
                 }
             }
             catch (Exception ex)
             {
                 _loggingService.LogError("Ошибка обновления линий порогов", ex.Message);
+            }
+        }
+
+        /// <summary>
+        /// Обновление графика без пересоздания серий
+        /// </summary>
+        private void RefreshPlot()
+        {
+            if (_mainPlot == null) return;
+
+            try
+            {
+                // Обновляем легенду
+                if (_dataReceived)
+                {
+                    _mainPlot.Plot.Legend();
+                }
+
+                // Обновляем график
+                _mainPlot.Refresh();
+            }
+            catch (Exception ex)
+            {
+                _loggingService.LogError("Ошибка обновления графика", ex.Message);
+            }
+        }
+
+        /// <summary>
+        /// Очистка графика
+        /// </summary>
+        private void ClearGraph()
+        {
+            try
+            {
+                // Очищаем все коллекции точек
+                foreach (var series in _dataPoints.Keys.ToList())
+                {
+                    _dataPoints[series].Clear();
+                }
+
+                // Сбрасываем счетчик времени
+                _elapsedTime = 0;
+
+                // Сбрасываем флаг наличия данных
+                _dataReceived = false;
+
+                // Очищаем график
+                if (_mainPlot != null)
+                {
+                    _mainPlot.Plot.Clear();
+
+                    // Добавляем текст "Ожидание данных..." на график
+                    _mainPlot.Plot.AddText("Ожидание данных...", 0.5, 0.5,
+                        size: 24, color: System.Drawing.Color.Gray)
+                        .Alignment = ScottPlot.Alignment.MiddleCenter;
+
+                    // Устанавливаем начальные границы осей
+                    _mainPlot.Plot.SetAxisLimits(0, 30, 0, 2500);
+
+                    // Переинициализируем серии данных
+                    InitializeDataSeries();
+
+                    // Обновляем график
+                    RefreshPlot();
+                }
+
+                StatusMessage = "График очищен";
+                _loggingService.LogInfo("График очищен");
+            }
+            catch (Exception ex)
+            {
+                _loggingService.LogError("Ошибка при очистке графика", ex.Message);
+                StatusMessage = "Ошибка при очистке графика";
+            }
+        }
+
+        /// <summary>
+        /// Экспорт графика в файл
+        /// </summary>
+        private void ExportGraph(string format)
+        {
+            if (_mainPlot == null)
+            {
+                StatusMessage = "График не инициализирован";
+                return;
+            }
+
+            try
+            {
+                // Создаем диалог сохранения файла
+                var dialog = new SaveFileDialog
+                {
+                    DefaultExt = $".{format.ToLower()}",
+                    Filter = $"{format} Image (*.{format.ToLower()})|*.{format.ToLower()}|All Files (*.*)|*.*",
+                    Title = "Сохранить график"
+                };
+
+                // Если пользователь выбрал файл
+                if (dialog.ShowDialog() == true)
+                {
+                    // Сохраняем график в файл
+                    _mainPlot.Plot.SaveFig(dialog.FileName);
+                    _loggingService.LogInfo($"График сохранен в файл {format}", dialog.FileName);
+                    StatusMessage = $"График сохранен в файл {format}";
+                }
+            }
+            catch (Exception ex)
+            {
+                _loggingService.LogError("Ошибка при экспорте графика", ex.Message);
+                StatusMessage = "Ошибка при экспорте графика";
+            }
+        }
+
+        /// <summary>
+        /// Экспорт данных в CSV-файл
+        /// </summary>
+        private void ExportData()
+        {
+            try
+            {
+                // Проверяем наличие данных
+                if (!_dataReceived)
+                {
+                    StatusMessage = "Нет данных для экспорта";
+                    return;
+                }
+
+                // Создаем диалог сохранения файла
+                var dialog = new SaveFileDialog
+                {
+                    DefaultExt = ".csv",
+                    Filter = "CSV Files (*.csv)|*.csv|All Files (*.*)|*.*",
+                    Title = "Экспорт данных графика"
+                };
+
+                // Если пользователь выбрал файл
+                if (dialog.ShowDialog() == true)
+                {
+                    // Создаем CSV-файл вручную, с корректным форматированием
+                    using (var writer = new System.IO.StreamWriter(dialog.FileName, false, System.Text.Encoding.UTF8))
+                    {
+                        // Записываем заголовки колонок
+                        writer.WriteLine("Время;Обороты двигателя;Обороты турбокомпрессора;Давление масла;Давление наддува;Температура масла");
+
+                        // Создаем словарь для быстрого доступа к данным по времени
+                        var timePoints = new SortedDictionary<double, Dictionary<string, double>>();
+
+                        // Заполняем словарь данными
+                        foreach (var series in _dataPoints)
+                        {
+                            string seriesName = series.Key;
+                            var points = series.Value;
+
+                            foreach (var point in points)
+                            {
+                                if (!timePoints.ContainsKey(point.X))
+                                {
+                                    timePoints[point.X] = new Dictionary<string, double>();
+                                }
+                                timePoints[point.X][seriesName] = point.Y;
+                            }
+                        }
+
+                        // Записываем данные
+                        foreach (var timePoint in timePoints)
+                        {
+                            double time = timePoint.Key;
+                            var values = timePoint.Value;
+
+                            // Получаем значения для каждой серии (если нет, то NaN)
+                            double engineSpeed = values.TryGetValue("Обороты двигателя", out double val1) ? val1 : double.NaN;
+                            double turboSpeed = values.TryGetValue("Обороты турбокомпрессора", out double val2) ? val2 : double.NaN;
+                            double oilPressure = values.TryGetValue("Давление масла", out double val3) ? val3 : double.NaN;
+                            double boostPressure = values.TryGetValue("Давление наддува", out double val4) ? val4 : double.NaN;
+                            double oilTemp = values.TryGetValue("Температура масла", out double val5) ? val5 : double.NaN;
+
+                            // Форматируем строку CSV
+                            writer.WriteLine(string.Format(
+                                "{0};{1};{2};{3};{4};{5}",
+                                time.ToString("0.0", System.Globalization.CultureInfo.InvariantCulture),
+                                double.IsNaN(engineSpeed) ? "" : engineSpeed.ToString("0", System.Globalization.CultureInfo.InvariantCulture),
+                                double.IsNaN(turboSpeed) ? "" : turboSpeed.ToString("0", System.Globalization.CultureInfo.InvariantCulture),
+                                double.IsNaN(oilPressure) ? "" : oilPressure.ToString("0.00", System.Globalization.CultureInfo.InvariantCulture),
+                                double.IsNaN(boostPressure) ? "" : boostPressure.ToString("0.00", System.Globalization.CultureInfo.InvariantCulture),
+                                double.IsNaN(oilTemp) ? "" : oilTemp.ToString("0.0", System.Globalization.CultureInfo.InvariantCulture)
+                            ));
+                        }
+                    }
+
+                    _loggingService.LogInfo("Данные графика экспортированы в CSV", dialog.FileName);
+                    StatusMessage = "Данные экспортированы в CSV";
+                }
+            }
+            catch (Exception ex)
+            {
+                _loggingService.LogError("Ошибка при экспорте данных", ex.Message);
+                StatusMessage = "Ошибка при экспорте данных";
+            }
+        }
+
+        /// <summary>
+        /// Автоматическое масштабирование графика
+        /// </summary>
+        private void AutoScale()
+        {
+            if (_mainPlot == null) return;
+
+            try
+            {
+                // Автоматически настраиваем масштаб графика
+                if (_dataReceived)
+                {
+                    _mainPlot.Plot.AxisAuto();
+                    _mainPlot.Refresh();
+                    StatusMessage = "Автоматическое масштабирование графика выполнено";
+
+                    // Отключаем автопрокрутку
+                    AutoScroll = false;
+                }
+                else
+                {
+                    // Устанавливаем разумные начальные границы
+                    _mainPlot.Plot.SetAxisLimits(0, 30, 0, 2500);
+                    _mainPlot.Refresh();
+                    StatusMessage = "Установлены начальные границы осей";
+                }
+            }
+            catch (Exception ex)
+            {
+                _loggingService.LogError("Ошибка масштабирования графика", ex.Message);
+                StatusMessage = "Ошибка масштабирования графика";
             }
         }
 
@@ -900,6 +1008,7 @@ namespace Regulyators.UI.ViewModels
                 // Очистка ссылок на объекты графика
                 _mainPlot = null;
                 _plotSeries?.Clear();
+                _dataPoints?.Clear();
 
                 _loggingService?.LogInfo("ImprovedChartViewModel: ресурсы освобождены");
             }
@@ -911,15 +1020,11 @@ namespace Regulyators.UI.ViewModels
     }
 
     /// <summary>
-    /// Класс для хранения данных точки на графике для экспорта
+    /// Класс для хранения точки данных графика
     /// </summary>
-    public class ChartDataPoint
+    public class DataPoint
     {
-        public double Time { get; set; }
-        public double EngineSpeed { get; set; }
-        public double TurboCompressorSpeed { get; set; }
-        public double OilPressure { get; set; }
-        public double BoostPressure { get; set; }
-        public double OilTemperature { get; set; }
+        public double X { get; set; }
+        public double Y { get; set; }
     }
 }
