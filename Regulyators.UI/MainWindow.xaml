@@ -6,11 +6,16 @@
     xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
     xmlns:local="clr-namespace:Regulyators.UI"
     xmlns:viewmodels="clr-namespace:Regulyators.UI.ViewModels"
+    xmlns:converters="clr-namespace:Regulyators.UI.Converters"
     mc:Ignorable="d"
     Title="Система испытаний регуляторов ЭРЧМ30ТЗ" 
-    Height="800" 
+    Height="850" 
     Width="1100"
     WindowStartupLocation="CenterScreen">
+
+    <Window.Resources>
+        <converters:ValueToVisibilityConverter x:Key="BoolToVisibilityConverter"/>
+    </Window.Resources>
 
     <Window.DataContext>
         <viewmodels:MainViewModel />
@@ -95,6 +100,40 @@
                     Text="{Binding CurrentDateTime, StringFormat='{}{0:dd.MM.yyyy HH:mm:ss}'}" 
                     HorizontalAlignment="Right" />
             </DockPanel>
+        </Border>
+
+        <!-- Индикатор занятости (перекрывает весь UI) -->
+        <Border 
+            Grid.RowSpan="3"
+            Background="#80000000" 
+            Visibility="{Binding IsBusy, Converter={StaticResource BoolToVisibilityConverter}}"
+            Panel.ZIndex="1000">
+            <Border 
+                Background="White" 
+                Width="300" 
+                Height="120" 
+                CornerRadius="8" 
+                HorizontalAlignment="Center" 
+                VerticalAlignment="Center">
+                <Border.Effect>
+                    <DropShadowEffect BlurRadius="10" ShadowDepth="5" Opacity="0.3" />
+                </Border.Effect>
+                <StackPanel 
+                    HorizontalAlignment="Center" 
+                    VerticalAlignment="Center" 
+                    Margin="20">
+                    <TextBlock 
+                        Text="{Binding BusyMessage}" 
+                        HorizontalAlignment="Center" 
+                        Margin="0,0,0,15"
+                        FontSize="14"/>
+                    <ProgressBar 
+                        IsIndeterminate="True" 
+                        Width="250" 
+                        Height="8" 
+                        Foreground="#2196F3"/>
+                </StackPanel>
+            </Border>
         </Border>
     </Grid>
 </Window>

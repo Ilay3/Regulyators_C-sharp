@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Threading.Tasks;
 using System.Windows.Input;
 using Regulyators.UI.Common;
 using Regulyators.UI.Services;
@@ -19,6 +20,7 @@ namespace Regulyators.UI.ViewModels
         private bool _isRandomFailures;
         private bool _isStressTest;
         private string _selectedScenario;
+        private bool _isButtonEnabled = true;
 
         /// <summary>
         /// Активна ли симуляция
@@ -61,7 +63,19 @@ namespace Regulyators.UI.ViewModels
         public bool IsRandomFailures
         {
             get => _isRandomFailures;
-            set => SetProperty(ref _isRandomFailures, value);
+            set
+            {
+                if (SetProperty(ref _isRandomFailures, value))
+                {
+                    if (_simulationService != null)
+                    {
+                        _simulationService.RandomFailures = value;
+                        StatusMessage = value ?
+                            "Режим случайных сбоев включен" :
+                            "Режим случайных сбоев отключен";
+                    }
+                }
+            }
         }
 
         /// <summary>
@@ -70,7 +84,28 @@ namespace Regulyators.UI.ViewModels
         public bool IsStressTest
         {
             get => _isStressTest;
-            set => SetProperty(ref _isStressTest, value);
+            set
+            {
+                if (SetProperty(ref _isStressTest, value))
+                {
+                    if (_simulationService != null)
+                    {
+                        _simulationService.StressTest = value;
+                        StatusMessage = value ?
+                            "Режим стресс-теста включен" :
+                            "Режим стресс-теста отключен";
+                    }
+                }
+            }
+        }
+
+        /// <summary>
+        /// Доступность кнопок управления (блокировка во время переходных процессов)
+        /// </summary>
+        public bool IsButtonEnabled
+        {
+            get => _isButtonEnabled;
+            set => SetProperty(ref _isButtonEnabled, value);
         }
 
         /// <summary>
@@ -120,30 +155,56 @@ namespace Regulyators.UI.ViewModels
             _selectedScenario = "Стандартный";
 
             // Инициализация команд
-            ToggleSimulationCommand = new RelayCommand(ToggleSimulation);
-            SimulateFaultCommand = new RelayCommand<string>(SimulateFault);
-            ResetSimulationCommand = new RelayCommand(ResetSimulation);
+            ToggleSimulationCommand = new RelayCommand(ToggleSimulation, () => IsButtonEnabled);
+            SimulateFaultCommand = new RelayCommand<string>(SimulateFault, _ => IsSimulationRunning && IsButtonEnabled);
+            ResetSimulationCommand = new RelayCommand(ResetSimulation, () => IsButtonEnabled);
+
+            // Подписка на события
+            _simulationService.SimulationStatusChanged += OnSimulationStatusChanged;
         }
 
         /// <summary>
         /// Запуск/остановка симуляции
         /// </summary>
-        private void ToggleSimulation()
+        private async void ToggleSimulation()
         {
-            if (_isSimulationRunning)
+            try
             {
-                _simulationService.StopSimulation();
-                _comPortService.SetSimulationMode(false);
-                StatusMessage = "Симуляция остановлена";
-            }
-            else
-            {
-                _comPortService.SetSimulationMode(true);
-                _simulationService.StartSimulation();
-                StatusMessage = "Симуляция запущена";
-            }
+                // Блокируем кнопки на время операции
+                IsButtonEnabled = false;
 
-            IsSimulationRunning = _simulationService.IsSimulationRunning;
+                if (_isSimulationRunning)
+                {
+                    StatusMessage = "Останавливаем симуляцию...";
+                    _simulationService.StopSimulation();
+                    StatusMessage = "Симуляция остановлена";
+                }
+                else
+                {
+                    StatusMessage = "Запускаем симуляцию...";
+                    // Настраиваем параметры симуляции
+                    _simulationService.RandomFailures = _isRandomFailures;
+                    _simulationService.StressTest = _isStressTest;
+                    _simulationService.SimulationScenario = _selectedScenario;
+
+                    // Запускаем симуляцию
+                    _simulationService.StartSimulation();
+                    StatusMessage = "Симуляция запущена";
+                }
+
+                // Небольшая задержка для стабилизации
+                await Task.Delay(500);
+            }
+            catch (Exception ex)
+            {
+                _loggingService.LogError($"Ошибка при {(_isSimulationRunning ? "остановке" : "запуске")} симуляции: {ex.Message}", ex.StackTrace);
+                StatusMessage = $"Ошибка: {ex.Message}";
+            }
+            finally
+            {
+                // Разблокируем кнопки
+                IsButtonEnabled = true;
+            }
         }
 
         /// <summary>
@@ -186,8 +247,20 @@ namespace Regulyators.UI.ViewModels
                 case "ConnectionLoss":
                     StatusMessage = "Имитация потери связи";
                     _loggingService.LogWarning("Симуляция потери связи", "Ручная активация");
-                    _simulationService.StopSimulation();
-                    IsSimulationRunning = false;
+
+                    // Временно отключаем ComPort
+                    _comPortService.SimulateConnection(false);
+
+                    // Через 3 секунды восстанавливаем, если симуляция еще активна
+                    Task.Delay(3000).ContinueWith(_ =>
+                    {
+                        if (_simulationService.IsSimulationRunning)
+                        {
+                            _loggingService.LogInfo("Восстановление соединения после имитации потери связи");
+                            _comPortService.SimulateConnection(true);
+                            StatusMessage = "Соединение восстановлено";
+                        }
+                    });
                     break;
             }
         }
@@ -195,22 +268,44 @@ namespace Regulyators.UI.ViewModels
         /// <summary>
         /// Сброс симуляции
         /// </summary>
-        private void ResetSimulation()
+        private async void ResetSimulation()
         {
-            if (_isSimulationRunning)
+            try
             {
-                _simulationService.StopSimulation();
+                // Блокируем кнопки на время операции
+                IsButtonEnabled = false;
+                StatusMessage = "Сброс симуляции...";
+
+                // Если симуляция активна, останавливаем ее
+                if (_isSimulationRunning)
+                {
+                    _simulationService.StopSimulation();
+                }
+
+                // Небольшая пауза перед перезапуском
+                await Task.Delay(1000);
+
+                // Применяем настройки
+                _simulationService.RandomFailures = _isRandomFailures;
+                _simulationService.StressTest = _isStressTest;
+                _simulationService.SimulationScenario = _selectedScenario;
+
+                // Запускаем симуляцию
+                _simulationService.StartSimulation();
+
+                StatusMessage = "Симуляция перезапущена с новыми параметрами";
+                _loggingService.LogInfo("Симуляция перезапущена с новыми параметрами");
             }
-
-            // Пауза перед перезапуском
-            System.Threading.Thread.Sleep(500);
-
-            _comPortService.SetSimulationMode(true);
-            _simulationService.StartSimulation();
-            IsSimulationRunning = true;
-
-            StatusMessage = "Симуляция перезапущена";
-            _loggingService.LogInfo("Симуляция перезапущена");
+            catch (Exception ex)
+            {
+                _loggingService.LogError($"Ошибка при сбросе симуляции: {ex.Message}", ex.StackTrace);
+                StatusMessage = $"Ошибка: {ex.Message}";
+            }
+            finally
+            {
+                // Разблокируем кнопки
+                IsButtonEnabled = true;
+            }
         }
 
         /// <summary>
@@ -220,14 +315,23 @@ namespace Regulyators.UI.ViewModels
         {
             if (!_isSimulationRunning)
             {
-                StatusMessage = "Невозможно применить сценарий: симуляция не запущена";
+                StatusMessage = $"Сценарий '{_selectedScenario}' будет применен при запуске симуляции";
                 return;
             }
 
-            StatusMessage = $"Применен сценарий симуляции: {_selectedScenario}";
-            _loggingService.LogInfo($"Смена сценария симуляции на: {_selectedScenario}");
+            // Устанавливаем сценарий
+            _simulationService.SimulationScenario = _selectedScenario;
 
-            // Реализация в SimulationService
+            StatusMessage = $"Применен сценарий симуляции: {_selectedScenario}";
+            _loggingService.LogInfo($"Сменен сценарий симуляции на: {_selectedScenario}");
+        }
+
+        /// <summary>
+        /// Обработчик события изменения статуса симуляции
+        /// </summary>
+        private void OnSimulationStatusChanged(object sender, bool isRunning)
+        {
+            IsSimulationRunning = isRunning;
         }
     }
 }

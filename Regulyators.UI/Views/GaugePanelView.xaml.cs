@@ -24,8 +24,9 @@ namespace Regulyators.UI.Views
             // Регистрируем обработчик события выгрузки для освобождения ресурсов
             Unloaded += (s, e) =>
             {
-                // Очищаем ресурсы при выгрузке контрола
-                _viewModel.Dispose();
+                // Вызываем Dispose у ViewModel для освобождения ресурсов
+                _viewModel?.Dispose();
+                _viewModel = null;
             };
         }
     }

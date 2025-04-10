@@ -24,10 +24,6 @@ namespace Regulyators.UI.ViewModels
         /// </summary>
         public ICommand ClearLogsCommand { get; }
 
-        /// <summary>
-        /// Команда экспорта журнала
-        /// </summary>
-        public ICommand ExportLogsCommand { get; }
 
         /// <summary>
         /// Конструктор
@@ -38,7 +34,7 @@ namespace Regulyators.UI.ViewModels
 
             // Инициализация команд
             ClearLogsCommand = new RelayCommand(ClearLogs);
-            ExportLogsCommand = new RelayCommand(ExportLogs);
+            
         }
 
         /// <summary>
@@ -50,13 +46,6 @@ namespace Regulyators.UI.ViewModels
             _loggingService.LogInfo("Журнал очищен");
         }
 
-        /// <summary>
-        /// Экспорт журнала (заглушка)
-        /// </summary>
-        private void ExportLogs()
-        {
-            // Здесь будет код экспорта
-            _loggingService.LogInfo("Экспорт журнала", "Функция в разработке");
-        }
+        
     }
 }

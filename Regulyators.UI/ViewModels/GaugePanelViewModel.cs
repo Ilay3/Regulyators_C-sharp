@@ -1,7 +1,4 @@
 ﻿using System;
-using System.Collections.Generic;
-using System.ComponentModel;
-using System.Runtime.CompilerServices;
 using System.Windows;
 using System.Windows.Input;
 using Regulyators.UI.Common;
@@ -13,7 +10,7 @@ namespace Regulyators.UI.ViewModels
     /// <summary>
     /// ViewModel для панели аналоговых индикаторов
     /// </summary>
-    public class GaugePanelViewModel : INotifyPropertyChanged
+    public class GaugePanelViewModel : ViewModelBase
     {
         private readonly ComPortService _comPortService;
         private readonly LoggingService _loggingService;
@@ -32,8 +29,10 @@ namespace Regulyators.UI.ViewModels
             get => _engineParameters;
             set
             {
-                _engineParameters = value;
-                OnPropertyChanged();
+                if (SetProperty(ref _engineParameters, value))
+                {
+                    OnPropertyChanged(nameof(EngineParameters));
+                }
             }
         }
 
@@ -45,10 +44,8 @@ namespace Regulyators.UI.ViewModels
             get => _selectedUpdateInterval;
             set
             {
-                if (_selectedUpdateInterval != value)
+                if (SetProperty(ref _selectedUpdateInterval, value))
                 {
-                    _selectedUpdateInterval = value;
-                    OnPropertyChanged();
                     UpdatePollingInterval();
                 }
             }
@@ -62,10 +59,8 @@ namespace Regulyators.UI.ViewModels
             get => _isConnected;
             set
             {
-                if (_isConnected != value)
+                if (SetProperty(ref _isConnected, value))
                 {
-                    _isConnected = value;
-                    OnPropertyChanged();
                     StatusMessage = value ? "Подключено к оборудованию" : "Нет подключения к оборудованию";
                 }
             }
@@ -77,11 +72,7 @@ namespace Regulyators.UI.ViewModels
         public string StatusMessage
         {
             get => _statusMessage;
-            set
-            {
-                _statusMessage = value;
-                OnPropertyChanged();
-            }
+            set => SetProperty(ref _statusMessage, value);
         }
 
         #endregion
@@ -254,25 +245,21 @@ namespace Regulyators.UI.ViewModels
         }
 
         /// <summary>
-        /// Очистка ресурсов при выгрузке
+        /// Освобождение управляемых ресурсов (отписка от событий)
         /// </summary>
-        public void Dispose()
+        protected override void ReleaseMangedResources()
         {
-            // Отписываемся от событий
-            _comPortService.DataReceived -= OnDataReceived;
-            _comPortService.ConnectionStatusChanged -= OnConnectionStatusChanged;
-            _comPortService.ErrorOccurred -= OnErrorOccurred;
+            base.ReleaseMangedResources();
+
+            // Отписываемся от всех событий для предотвращения утечек памяти
+            if (_comPortService != null)
+            {
+                _comPortService.DataReceived -= OnDataReceived;
+                _comPortService.ConnectionStatusChanged -= OnConnectionStatusChanged;
+                _comPortService.ErrorOccurred -= OnErrorOccurred;
+            }
+
+            _loggingService?.LogInfo("GaugePanelViewModel: ресурсы освобождены");
         }
-
-        #region INotifyPropertyChanged
-
-        public event PropertyChangedEventHandler PropertyChanged;
-
-        protected virtual void OnPropertyChanged([CallerMemberName] string propertyName = null)
-        {
-            PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
-        }
-
-        #endregion
     }
 }
