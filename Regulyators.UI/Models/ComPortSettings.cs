@@ -11,10 +11,10 @@ namespace Regulyators.UI.Models
     public class ComPortSettings : INotifyPropertyChanged
     {
         private string _portName = "COM1";
-        private int _baudRate = 38400;
+        private int _baudRate = 9600;
         private int _dataBits = 8;
-        private StopBits _stopBits = StopBits.One;
-        private Parity _parity = Parity.None;
+        private StopBits _stopBits = StopBits.Two;
+        private Parity _parity = Parity.Odd;
         private int _readTimeout = 1000;
         private int _writeTimeout = 1000;
         private int _pollingInterval = 500;

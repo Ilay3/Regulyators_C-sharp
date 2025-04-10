@@ -378,7 +378,7 @@ namespace Regulyators.UI.ViewModels
         }
 
         /// <summary>
-        /// Применение настроек
+        /// Применение настроек коммуникации в соответствии с протоколом ЭРЧМ30ТЗ
         /// </summary>
         private async void ApplySettings()
         {
@@ -388,23 +388,61 @@ namespace Regulyators.UI.ViewModels
                 IsBusy = true;
                 BusyMessage = "Применение настроек...";
 
+                // Проверка соответствия настроек протоколу ЭРЧМ30ТЗ
+                bool settingsChanged = false;
+                string warningMessage = string.Empty;
+
+                // Проверка скорости передачи (должна быть 9600 бод)
+                if (ComPortSettings.BaudRate != 9600)
+                {
+                    ComPortSettings.BaudRate = 9600;
+                    settingsChanged = true;
+                    warningMessage += "Скорость передачи изменена на 9600 бод в соответствии с протоколом. ";
+                }
+
+                // Проверка стоповых битов (должно быть 2)
+                if (ComPortSettings.StopBits != StopBits.Two)
+                {
+                    ComPortSettings.StopBits = StopBits.Two;
+                    settingsChanged = true;
+                    warningMessage += "Стоповые биты изменены на 2 в соответствии с протоколом. ";
+                }
+
+                // Проверка четности (должна быть нечетность)
+                if (ComPortSettings.Parity != Parity.Odd)
+                {
+                    ComPortSettings.Parity = Parity.Odd;
+                    settingsChanged = true;
+                    warningMessage += "Четность изменена на 'Нечетные' в соответствии с протоколом. ";
+                }
+
                 // Асинхронно применяем настройки
                 await Task.Run(() => {
                     // Обновляем настройки COM-порта
-                    _settingsService.UpdateComPortSettings(_comPortSettings.Clone());
+                    _settingsService.UpdateComPortSettings(ComPortSettings.Clone());
 
                     // Обновляем пороги защит
-                    _settingsService.UpdateProtectionThresholds(_protectionThresholds.Clone());
+                    _settingsService.UpdateProtectionThresholds(ProtectionThresholds.Clone());
                 });
 
-                _loggingService.LogInfo("Настройки применены");
-                StatusMessage = "Настройки успешно применены";
+                // Если были изменения, выводим предупреждение
+                if (settingsChanged)
+                {
+                    _loggingService.LogWarning("Настройки автоматически откорректированы", warningMessage);
+                    StatusMessage = "Настройки применены с автоматической коррекцией: " + warningMessage;
+                }
+                else
+                {
+                    _loggingService.LogInfo("Настройки применены");
+                    StatusMessage = "Настройки успешно применены";
+                }
+
                 ApplyButtonEnabled = false;
             }
             catch (Exception ex)
             {
                 _loggingService.LogError("Ошибка применения настроек", ex.Message);
-                StatusMessage = "Ошибка применения настроек";
+                StatusMessage = "Ошибка применения настроек: " + ex.Message;
             }
             finally
             {

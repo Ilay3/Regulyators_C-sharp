@@ -286,6 +286,7 @@ namespace Regulyators.UI.ViewModels
                     _mainPlot.Plot.YAxis.TickLabelStyle(fontSize: 12);
                     _mainPlot.Plot.Legend(location: Alignment.UpperRight);
 
+
                     // Добавляем текст "Ожидание данных..." на график
                     _mainPlot.Plot.AddText("Ожидание данных...", 0.5, 0.5,
                         size: 24, color: System.Drawing.Color.Gray)

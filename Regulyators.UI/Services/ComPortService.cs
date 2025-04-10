@@ -807,6 +807,146 @@ namespace Regulyators.UI.Services
         }
 
         /// <summary>
+        /// Улучшенная обработка ошибок и восстановление соединения
+        /// </summary>
+        public async Task<bool> TryReconnectAsync()
+        {
+            int attemptCount = 0;
+            bool reconnected = false;
+
+            // Сохраняем исходное значение задержки переподключения
+            int originalReconnectDelay = _reconnectDelay;
+
+            try
+            {
+                while (attemptCount < _maxRetryAttempts && !reconnected)
+                {
+                    attemptCount++;
+                    _loggingService.LogInfo($"Попытка переподключения {attemptCount}/{_maxRetryAttempts}", $"Порт: {Settings.PortName}");
+
+                    // Сначала отключаемся, чтобы очистить ресурсы
+                    Disconnect();
+
+                    // Пауза перед повторной попыткой
+                    await Task.Delay(_reconnectDelay);
+
+                    try
+                    {
+                        // Проверка доступности порта
+                        string[] availablePorts = await Task.Run(() => SerialPort.GetPortNames());
+                        if (!availablePorts.Contains(Settings.PortName))
+                        {
+                            _loggingService.LogWarning($"Порт {Settings.PortName} недоступен, ожидание...");
+                            continue;
+                        }
+
+                        // Пробуем подключиться снова
+                        reconnected = Connect();
+
+                        if (reconnected)
+                        {
+                            _loggingService.LogInfo("Переподключение успешно", $"Порт: {Settings.PortName}");
+                            return true;
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        _loggingService.LogWarning($"Ошибка при попытке №{attemptCount}: {ex.Message}");
+                    }
+
+                    // Увеличиваем интервал между попытками для экспоненциальной задержки
+                    _reconnectDelay = Math.Min(_reconnectDelay * 2, 10000); // Максимум 10 секунд
+                }
+
+                _loggingService.LogError($"Не удалось переподключиться после {attemptCount} попыток", $"Порт: {Settings.PortName}");
+                return false;
+            }
+            catch (Exception ex)
+            {
+                string errorMessage = $"Критическая ошибка при попытке переподключения: {ex.Message}";
+                _loggingService.LogError(errorMessage, ex.StackTrace);
+                ErrorOccurred?.Invoke(this, errorMessage);
+                return false;
+            }
+            finally
+            {
+                // Восстанавливаем исходное значение задержки
+                _reconnectDelay = originalReconnectDelay;
+            }
+        }
+
+        /// <summary>
+        /// Улучшенная обработка ошибок чтения данных
+        /// </summary>
+        private byte[] ReadDataWithRetry(int bytesToRead, int maxRetries = 3)
+        {
+            int attempt = 0;
+            Exception lastException = null;
+
+            while (attempt < maxRetries)
+            {
+                try
+                {
+                    if (!IsConnected || _serialPort == null || !_serialPort.IsOpen)
+                    {
+                        _loggingService.LogWarning("Попытка чтения данных при отсутствии соединения");
+                        return null;
+                    }
+
+                    byte[] buffer = new byte[bytesToRead];
+                    int bytesRead = _serialPort.Read(buffer, 0, bytesToRead);
+
+                    if (bytesRead == 0)
+                    {
+                        // Если прочитано 0 байт, повторяем попытку
+                        _loggingService.LogWarning("Прочитано 0 байт, повторяем попытку...");
+                        attempt++;
+                        Task.Delay(50).Wait(); // Небольшая задержка перед повтором
+                        continue;
+                    }
+
+                    if (bytesRead != bytesToRead)
+                    {
+                        // Частичное чтение - возвращаем только прочитанные данные
+                        _loggingService.LogWarning($"Неполное чтение данных: прочитано {bytesRead} из {bytesToRead} байт");
+                        byte[] result = new byte[bytesRead];
+                        Array.Copy(buffer, result, bytesRead);
+                        return result;
+                    }
+
+                    // Успешное чтение
+                    return buffer;
+                }
+                catch (TimeoutException ex)
+                {
+                    lastException = ex;
+                    _loggingService.LogWarning($"Таймаут чтения данных (попытка {attempt + 1}/{maxRetries})");
+                }
+                catch (InvalidOperationException ex)
+                {
+                    lastException = ex;
+                    _loggingService.LogError("Порт закрыт или недоступен при попытке чтения данных");
+                    IsConnected = false;
+                    return null; // Прекращаем попытки при ошибке порта
+                }
+                catch (Exception ex)
+                {
+                    lastException = ex;
+                    _loggingService.LogError($"Ошибка чтения данных: {ex.Message}");
+                }
+
+                attempt++;
+                Task.Delay(100 * attempt).Wait(); // Увеличиваем задержку с каждой попыткой
+            }
+
+            // Если все попытки неудачны, генерируем событие ошибки
+            string errorMessage = $"Не удалось прочитать данные после {maxRetries} попыток";
+            _loggingService.LogError(errorMessage, lastException?.Message);
+            ErrorOccurred?.Invoke(this, errorMessage);
+            return null;
+        }
+
+        /// <summary>
         /// Асинхронное чтение ответа на команду
         /// </summary>
         private async Task<bool> ReadResponseAsync(ERCHM30TZCommand command)
@@ -815,92 +955,116 @@ namespace Regulyators.UI.Services
             {
                 _loggingService.LogInfo("Ожидание ответа на команду", $"Тип: {command.CommandType}, Задержка: {Settings.ResponseDelay} мс");
 
+                // Константы протокола
+                const byte SYNC_START = 255; // Признак начала пакета (0xFF)
+                const byte SYNC_2 = 254;     // Байт для byte-stuffing (0xFE)
+
                 // Ждем начала ответа
                 await Task.Delay(Settings.ResponseDelay);
 
-                // Проверяем, есть ли данные для чтения
-                if (_serialPort?.BytesToRead > 0)
+                // Читаем байты ответа
+                List<byte> responseBuffer = new List<byte>();
+                bool packetStartFound = false;
+                byte lastByte = 0;
+                int timeoutCounter = 0;
+
+                // Ожидаем данные с таймаутом
+                while (timeoutCounter < 50) // Максимум 5 секунд при задержке 100 мс
                 {
-                    _loggingService.LogInfo($"Получен ответ, байт доступно: {_serialPort.BytesToRead}");
-
-                    // Читаем заголовок ответа (первые 4 байта)
-                    byte[] header = ReadData(4);
-
-                    if (header != null && header.Length == 4)
+                    if (_serialPort?.BytesToRead > 0)
                     {
-                        // Проверяем маркер начала пакета (0xAA, 0x55 для ЭРЧМ30ТЗ)
-                        if (header[0] == 0xAA && header[1] == 0x55)
+                        byte[] buffer = new byte[_serialPort.BytesToRead];
+                        int bytesRead = _serialPort.Read(buffer, 0, buffer.Length);
+
+                        for (int i = 0; i < bytesRead; i++)
                         {
-                            // Определяем длину данных из третьего и четвертого байтов (младший и старший байт)
-                            int dataLength = header[2] | (header[3] << 8);
+                            byte currentByte = buffer[i];
 
-                            _loggingService.LogInfo($"Получен заголовок ответа, длина данных: {dataLength} байт");
-
-                            if (dataLength > 0 && dataLength < 1024) // Проверка на разумный размер данных
+                            if (!packetStartFound)
                             {
-                                // Читаем данные
-                                byte[] data = ReadData(dataLength);
-
-                                if (data != null)
+                                // Ищем начало пакета (SYNC_START)
+                                if (currentByte == SYNC_START)
                                 {
-                                    // Читаем контрольную сумму (1 байт)
-                                    byte[] checksumBytes = ReadData(1);
-
-                                    if (checksumBytes != null && checksumBytes.Length == 1)
-                                    {
-                                        byte receivedChecksum = checksumBytes[0];
-
-                                        // Вычисляем контрольную сумму
-                                        byte calculatedChecksum = CalculateChecksum(header.Concat(data).ToArray());
-
-                                        if (receivedChecksum == calculatedChecksum)
-                                        {
-                                            // Обрабатываем полученные данные
-                                            return ProcessResponse(command, data);
-                                        }
-                                        else
-                                        {
-                                            _loggingService.LogWarning(
-                                                $"Ошибка контрольной суммы: получено 0x{receivedChecksum:X2}, вычислено 0x{calculatedChecksum:X2}");
-                                            return false;
-                                        }
-                                    }
-                                    else
-                                    {
-                                        _loggingService.LogWarning("Не удалось прочитать контрольную сумму");
-                                        return false;
-                                    }
-                                }
-                                else
-                                {
-                                    _loggingService.LogWarning("Не удалось прочитать данные ответа");
-                                    return false;
+                                    packetStartFound = true;
+                                    responseBuffer.Add(currentByte);
                                 }
                             }
                             else
                             {
-                                _loggingService.LogWarning($"Недопустимая длина данных: {dataLength}");
-                                return false;
+                                // Обработка byte-stuffing: если предыдущий байт был SYNC_START и текущий SYNC_2,
+                                // то это не новый пакет, а экранированный SYNC_START в данных
+                                if (lastByte == SYNC_START && currentByte == SYNC_2)
+                                {
+                                    // Уже добавили SYNC_START, игнорируем SYNC_2
+                                    lastByte = currentByte;
+                                    continue;
+                                }
+
+                                // Если получен SYNC_START не после SYNC_2, то это начало нового пакета
+                                if (currentByte == SYNC_START && lastByte != SYNC_2)
+                                {
+                                    // Очищаем буфер и начинаем новый пакет
+                                    responseBuffer.Clear();
+                                    responseBuffer.Add(currentByte);
+                                }
+                                else
+                                {
+                                    // Обычный байт данных
+                                    responseBuffer.Add(currentByte);
+                                }
                             }
+
+                            lastByte = currentByte;
                         }
-                        else
+
+                        // Проверяем, есть ли у нас полный пакет
+                        if (responseBuffer.Count >= 3) // Минимум SYNC_START, L_DAT, COM
                         {
-                            _loggingService.LogWarning("Неверный маркер начала пакета",
-                                $"Получено: 0x{header[0]:X2}{header[1]:X2}, ожидалось: 0xAA55");
-                            return false;
+                            byte lDat = responseBuffer[1]; // Длина пакета
+
+                            // Проверяем, получили ли мы весь пакет
+                            // Полный пакет = SYNC_START + L_DAT + COM + данные + CS
+                            if (responseBuffer.Count >= lDat + 2) // +2 для SYNC_START и L_DAT
+                            {
+                                // Проверка контрольной суммы
+                                int sum = 0;
+                                for (int i = 1; i < responseBuffer.Count - 1; i++)
+                                {
+                                    sum += responseBuffer[i];
+                                }
+                                byte calculatedChecksum = (byte)(256 - (sum % 256));
+                                byte receivedChecksum = responseBuffer[responseBuffer.Count - 1];
+
+                                if (calculatedChecksum == receivedChecksum)
+                                {
+                                    // Получаем команду из пакета
+                                    byte comByte = responseBuffer[2];
+
+                                    // Извлекаем данные (без SYNC_START, L_DAT, COM и CS)
+                                    byte[] data = responseBuffer.Skip(3).Take(lDat - 2).ToArray();
+
+                                    // Обрабатываем данные
+                                    return ProcessResponse(command, data);
+                                }
+                                else
+                                {
+                                    _loggingService.LogWarning(
+                                        $"Ошибка контрольной суммы: получено 0x{receivedChecksum:X2}, вычислено 0x{calculatedChecksum:X2}");
+                                    return false;
+                                }
+                            }
                         }
                     }
                     else
                     {
-                        _loggingService.LogWarning("Не удалось прочитать заголовок ответа");
-                        return false;
+                        // Если нет данных, ждем
+                        await Task.Delay(100);
+                        timeoutCounter++;
                     }
                 }
-                else
-                {
-                    _loggingService.LogWarning("Нет данных для чтения после ожидания ответа");
-                    return false;
-                }
+
+                _loggingService.LogWarning("Таймаут при ожидании ответа");
+                return false;
             }
             catch (Exception ex)
             {
@@ -1051,106 +1215,97 @@ namespace Regulyators.UI.Services
         /// </summary>
         private byte[] ComposePacket(ERCHM30TZCommand command)
         {
-            // Реализация формирования пакета по протоколу ЭРЧМ30ТЗ
+            // Реализация пакета в соответствии с требованиями протокола ЭРЧМ30ТЗ
             List<byte> packet = new List<byte>();
 
+            // Константы протокола
+            const byte SYNC_START = 255; // Признак начала пакета (0xFF)
+            const byte SYNC_2 = 254;     // Байт для byte-stuffing (0xFE)
+
             // Маркер начала пакета
-            packet.Add(0xAA);
-            packet.Add(0x55);
+            packet.Add(SYNC_START);
 
-            // Код команды
-            packet.Add((byte)command.CommandType);
-
-            // Длина данных (младший и старший байты)
-            int dataLength = 0;
-            byte[] data = null;
+            // Подготовим данные в соответствии с таблицей 1 из документации
+            List<byte> dataField = new List<byte>();
 
             switch (command.CommandType)
             {
                 case CommandType.GetParameters:
-                    // Для запроса параметров данных нет
+                    // Пустой запрос параметров, данные не требуются
                     break;
 
                 case CommandType.SetEngineSpeed:
-                    // Преобразуем значение оборотов в байты
-                    data = BitConverter.GetBytes((ushort)command.EngineSpeed);
-                    dataLength = data.Length;
-                    break;
-
-                case CommandType.SetRackPosition:
-                    // Преобразуем значение положения рейки в байты (умножаем на 100 для точности)
-                    data = BitConverter.GetBytes((ushort)(command.RackPosition * 100));
-                    dataLength = data.Length;
+                    // Задание частоты вращения (два байта: старший и младший)
+                    ushort speedValue = (ushort)command.EngineSpeed;
+                    dataField.Add((byte)(speedValue >> 8));   // Старший байт (F_z_h)
+                    dataField.Add((byte)(speedValue & 0xFF)); // Младший байт (F_z_l)
+                    dataField.Add(0); // Признак поездного режима (POWER): 0 = холостой ход
+                    dataField.Add(1); // Признак запуска/стопа (Pusk): 1 = РАБОТА
+                    dataField.Add(0); // Резерв
+                    dataField.Add(0); // Резерв
                     break;
 
                 case CommandType.SetEngineMode:
-                    // Преобразуем режим в байт
-                    data = new byte[] { (byte)command.EngineMode };
-                    dataLength = data.Length;
+                    // Формируем команду с признаком запуска/останова
+                    // Добавляем все байты из таблицы 1
+                    dataField.Add(0); // Старший байт задания частоты (F_z_h)
+                    dataField.Add(0); // Младший байт задания частоты (F_z_l)
+                    dataField.Add(0); // Признак поездного режима (POWER): 0 = холостой ход
+                                      // Признак запуска/стопа: 0 = СТОП, 1 = РАБОТА
+                    dataField.Add((byte)(command.EngineMode == EngineMode.Run ? 1 : 0));
+                    dataField.Add(0); // Резерв
+                    dataField.Add(0); // Резерв
                     break;
 
                 case CommandType.SetLoadType:
-                    // Преобразуем тип нагрузки в байт
-                    data = new byte[] { (byte)command.LoadType };
-                    dataLength = data.Length;
+                    // Формируем команду с признаком поездного режима
+                    dataField.Add(0); // Старший байт задания частоты (F_z_h)
+                    dataField.Add(0); // Младший байт задания частоты (F_z_l)
+                                      // Поездной режим: 0 = холостой ход, не 0 = поездной режим
+                    dataField.Add((byte)(command.LoadType == LoadType.Idle ? 0 : 1));
+                    dataField.Add(1); // Признак запуска/стопа (Pusk): 1 = РАБОТА
+                    dataField.Add(0); // Резерв
+                    dataField.Add(0); // Резерв
                     break;
 
-                case CommandType.SetEquipmentPosition:
-                    // Преобразуем позицию оборудования в байты
-                    data = BitConverter.GetBytes((ushort)command.EquipmentPosition);
-                    dataLength = data.Length;
-                    break;
-
-                case CommandType.GetProtectionStatus:
-                    // Для запроса статуса защит данных нет
-                    break;
-
-                case CommandType.SetProtectionThresholds:
-                    // Преобразуем пороги защит в байты
-                    List<byte> thresholdBytes = new List<byte>();
-
-                    // Добавляем минимальное давление масла (2 байта, умноженное на 100 для сохранения 2 знаков после запятой)
-                    thresholdBytes.AddRange(BitConverter.GetBytes((ushort)(command.Thresholds.OilPressureMinThreshold * 100)));
-
-                    // Добавляем максимальные обороты двигателя (2 байта)
-                    thresholdBytes.AddRange(BitConverter.GetBytes((ushort)command.Thresholds.EngineSpeedMaxThreshold));
-
-                    // Добавляем максимальное давление наддува (2 байта, умноженное на 100)
-                    thresholdBytes.AddRange(BitConverter.GetBytes((ushort)(command.Thresholds.BoostPressureMaxThreshold * 100)));
-
-                    // Добавляем максимальную температуру масла (2 байта, умноженное на 10)
-                    thresholdBytes.AddRange(BitConverter.GetBytes((ushort)(command.Thresholds.OilTemperatureMaxThreshold * 10)));
-
-                    data = thresholdBytes.ToArray();
-                    dataLength = data.Length;
-                    break;
-
-                case CommandType.ResetProtection:
-                    // Для сброса защит данных нет
-                    break;
+                    // [Другие команды]
             }
 
-            // Добавляем длину данных
-            packet.Add((byte)(dataLength & 0xFF));
-            packet.Add((byte)((dataLength >> 8) & 0xFF));
+            // Байт команды COM
+            byte comByte = (byte)command.CommandType;
 
-            // Добавляем данные, если есть
-            if (data != null && data.Length > 0)
+            // Длина пакета L_DAT: количество байт поля данных + 2 (COM и CS)
+            byte lDat = (byte)(dataField.Count + 2);
+            packet.Add(lDat);
+            packet.Add(comByte);
+
+            // Добавляем данные с обработкой byte-stuffing
+            foreach (byte dataByte in dataField)
             {
-                packet.AddRange(data);
+                // Если байт данных равен SYNC_START, добавляем после него SYNC_2
+                if (dataByte == SYNC_START)
+                {
+                    packet.Add(SYNC_START);
+                    packet.Add(SYNC_2);
+                }
+                else
+                {
+                    packet.Add(dataByte);
+                }
             }
 
-            // Считаем контрольную сумму
-            byte checksum = 0;
-            foreach (byte b in packet)
+            // Вычисляем контрольную сумму (байт CS)
+            // Сумма всех байт пакета по модулю 256, взятая с обратным знаком
+            // не включая SYNC_START
+            int sum = 0;
+            for (int i = 1; i < packet.Count; i++)
             {
-                checksum ^= b;
+                sum += packet[i];
             }
-
-            // Добавляем контрольную сумму
+            byte checksum = (byte)(256 - (sum % 256));
             packet.Add(checksum);
 
-            _loggingService.LogInfo($"Сформирован пакет данных для команды {command.CommandType}, длина: {packet.Count} байт");
+            _loggingService.LogInfo($"Сформирован пакет для команды {command.CommandType}, длина: {packet.Count} байт");
 
             return packet.ToArray();
         }

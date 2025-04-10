@@ -138,7 +138,7 @@ namespace Regulyators.UI.Services
             _engineSpeed = 0;
             _targetEngineSpeed = 0;
             _turboCompressorSpeed = 0;
-            _oilPressure = 0;
+            _oilPressure = 6;
             _boostPressure = 0;
             _oilTemperature = 25; // Начальная температура масла
             _rackPosition = 0;
