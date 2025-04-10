@@ -9,6 +9,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using System.Windows;
 using Regulyators.UI.Models;
+using System.Windows.Threading;
 
 namespace Regulyators.UI.Services
 {
@@ -21,6 +22,7 @@ namespace Regulyators.UI.Services
         private readonly Timer _autoSaveTimer;
         private readonly object _lockObj = new object();
         private CancellationTokenSource _cancellationTokenSource;
+        private readonly Dispatcher _dispatcher;
 
         // Настройки логирования
         private int _maxLogEntries = 1000;   // Максимальное число записей в памяти
@@ -38,7 +40,6 @@ namespace Regulyators.UI.Services
         public event EventHandler<LogEntry> LogAdded;
 
         public ObservableCollection<LogEntry> Logs { get; }
-        public event EventHandler<LogEntry> LogAdded;
 
         /// <summary>
         /// Текущий файл лога
