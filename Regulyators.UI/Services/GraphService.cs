@@ -7,6 +7,15 @@ using System.Linq;
 namespace Regulyators.UI.Services
 {
     /// <summary>
+    /// Класс для хранения точки данных графика
+    /// </summary>
+    public class DataPoint
+    {
+        public double X { get; set; }
+        public double Y { get; set; }
+    }
+
+    /// <summary>
     /// Сервис для управления графиками
     /// </summary>
     public class GraphService
@@ -66,6 +75,28 @@ namespace Regulyators.UI.Services
             count++;
 
             _dataSeries[seriesName] = (xData, yData, count, maxPoints);
+        }
+
+        /// <summary>
+        /// Получение данных серии
+        /// </summary>
+        /// <param name="seriesName">Название серии</param>
+        /// <returns>Список точек данных</returns>
+        public List<DataPoint> GetSeriesData(string seriesName)
+        {
+            var result = new List<DataPoint>();
+
+            if (_dataSeries.TryGetValue(seriesName, out var data))
+            {
+                var (xData, yData, count, _) = data;
+
+                for (int i = 0; i < count; i++)
+                {
+                    result.Add(new DataPoint { X = xData[i], Y = yData[i] });
+                }
+            }
+
+            return result;
         }
 
         /// <summary>

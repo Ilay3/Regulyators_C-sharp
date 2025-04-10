@@ -1,0 +1,128 @@
+﻿<UserControl 
+    x:Class="Regulyators.UI.Views.ImprovedChartView"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006" 
+    xmlns:d="http://schemas.microsoft.com/expression/blend/2008" 
+    xmlns:local="clr-namespace:Regulyators.UI.Views"
+    mc:Ignorable="d" 
+    d:DesignHeight="600" Width="1408">
+
+    <Grid Margin="16">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+
+        <!-- Заголовок -->
+        <TextBlock 
+            Grid.Row="0"
+            Text="График параметров двигателя" 
+            FontSize="18" 
+            FontWeight="Bold" 
+            Margin="0,0,0,8"/>
+
+        <!-- Основной график -->
+        <Border 
+            Grid.Row="1"
+            BorderBrush="#CCCCCC" 
+            BorderThickness="1"
+            Background="#F5F5F5"
+            CornerRadius="4">
+            <Grid>
+                <!-- WpfPlot контрол на весь доступный размер -->
+                <WpfPlot 
+                    x:Name="MainPlot"
+                    Margin="8"/>
+            </Grid>
+        </Border>
+
+        <!-- Панель управления графиком -->
+        <Grid Grid.Row="2" Margin="0,8,0,0">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*"/>
+                <ColumnDefinition Width="Auto"/>
+                <ColumnDefinition Width="Auto"/>
+                <ColumnDefinition Width="Auto"/>
+            </Grid.ColumnDefinitions>
+
+            <!-- Выбор параметров для отображения -->
+            <StackPanel 
+                Grid.Column="0" 
+                Orientation="Horizontal" 
+                HorizontalAlignment="Left">
+                <CheckBox 
+                    Content="Обороты двигателя" 
+                    IsChecked="{Binding ShowEngineSpeed}"
+                    Margin="0,0,12,0"/>
+                <CheckBox 
+                    Content="Обороты турбины" 
+                    IsChecked="{Binding ShowTurboSpeed}"
+                    Margin="0,0,12,0"/>
+                <CheckBox 
+                    Content="Давление масла" 
+                    IsChecked="{Binding ShowOilPressure}"
+                    Margin="0,0,12,0"/>
+                <CheckBox 
+                    Content="Давление наддува" 
+                    IsChecked="{Binding ShowBoostPressure}"
+                    Margin="0,0,12,0"/>
+                <CheckBox 
+                    Content="Температура масла" 
+                    IsChecked="{Binding ShowOilTemperature}"/>
+            </StackPanel>
+
+            <!-- Выбор временного интервала -->
+            <StackPanel 
+                Grid.Column="1" 
+                Orientation="Horizontal" 
+                HorizontalAlignment="Right">
+                <TextBlock 
+                    Text="Интервал:" 
+                    VerticalAlignment="Center"
+                    Margin="0,0,8,0"/>
+                <ComboBox 
+                    ItemsSource="{Binding TimeIntervals}"
+                    SelectedItem="{Binding SelectedTimeInterval}"
+                    Width="80"/>
+            </StackPanel>
+
+            <!-- Кнопки управления графиком -->
+            <StackPanel 
+                Grid.Column="2" 
+                Orientation="Horizontal" 
+                HorizontalAlignment="Right"
+                Margin="16,0,0,0">
+                <Button 
+                    Content="Автомасштаб" 
+                    Command="{Binding AutoScaleCommand}"
+                    Margin="0,0,8,0"
+                    Padding="8,4"/>
+                <Button 
+                    Content="Очистить" 
+                    Command="{Binding ClearGraphCommand}"
+                    Margin="0,0,8,0"
+                    Padding="8,4"/>
+            </StackPanel>
+
+            <!-- Кнопки экспорта -->
+            <StackPanel 
+                Grid.Column="3" 
+                Orientation="Horizontal" 
+                HorizontalAlignment="Right"
+                Margin="8,0,0,0">
+                <Button 
+                    Content="Экспорт PNG" 
+                    Command="{Binding ExportGraphCommand}"
+                    CommandParameter="PNG"
+                    Margin="0,0,8,0"
+                    Padding="8,4"/>
+                <Button 
+                    Content="Экспорт CSV" 
+                    Command="{Binding ExportDataCommand}"
+                    Padding="8,4"/>
+            </StackPanel>
+        </Grid>
+    </Grid>
+</UserControl>
