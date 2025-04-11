@@ -1,5 +1,7 @@
 ﻿using System;
+using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Threading;
 using Regulyators.UI.ViewModels;
 
 namespace Regulyators.UI.Views
@@ -15,20 +17,28 @@ namespace Regulyators.UI.Views
         {
             InitializeComponent();
 
-            // После загрузки контрола инициализируем график
+            // После загрузки контрола инициализируем график с задержкой
             Loaded += (s, e) =>
             {
                 if (DataContext is ImprovedChartViewModel viewModel)
                 {
                     _viewModel = viewModel;
-                    _viewModel.InitializeGraph(MainPlot);
+                    // Используем Dispatcher.BeginInvoke для отложенной инициализации
+                    Dispatcher.BeginInvoke(new Action(() =>
+                    {
+                        _viewModel.InitializeGraph(MainPlot);
+                    }), DispatcherPriority.Loaded);
                 }
                 else
                 {
                     // Если DataContext не установлен, создаем новый ViewModel
                     _viewModel = new ImprovedChartViewModel();
                     DataContext = _viewModel;
-                    _viewModel.InitializeGraph(MainPlot);
+                    // Используем Dispatcher.BeginInvoke для отложенной инициализации
+                    Dispatcher.BeginInvoke(new Action(() =>
+                    {
+                        _viewModel.InitializeGraph(MainPlot);
+                    }), DispatcherPriority.Loaded);
                 }
             };
 
