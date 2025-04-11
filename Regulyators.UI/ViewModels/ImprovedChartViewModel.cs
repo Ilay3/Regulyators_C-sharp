@@ -7,11 +7,15 @@ using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Input;
 using System.Windows.Media;
+using System.Windows.Threading;
+using ClosedXML.Excel.Drawings;
+using ClosedXML.Excel;
 using Microsoft.Win32;
 using Regulyators.UI.Common;
 using Regulyators.UI.Models;
 using Regulyators.UI.Services;
 using ScottPlot;
+using DocumentFormat.OpenXml.Drawing;
 
 namespace Regulyators.UI.ViewModels
 {
@@ -33,6 +37,7 @@ namespace Regulyators.UI.ViewModels
         private string _statusMessage;
         private string _selectedTimeInterval = "30";
         private bool _autoScroll = true;
+
 
         // Коллекции для хранения данных графика
         private Dictionary<string, List<double>> _xData = new Dictionary<string, List<double>>();
@@ -57,6 +62,15 @@ namespace Regulyators.UI.ViewModels
         private bool _showOilPressure = true;
         private bool _showBoostPressure = false;
         private bool _showOilTemperature = true;
+
+        // ★ Изменение: добавляем поля для буферизации входящих данных и таймера
+        private readonly object _bufferLock = new object();
+        private readonly List<EngineParameters> _incomingDataBuffer = new List<EngineParameters>();
+        private DispatcherTimer _uiUpdateTimer; // таймер для перерисовки графика
+        private DateTime? _startTime = null;
+
+
+        private readonly Dictionary<string, ScottPlot.Plottable.ScatterPlot> _seriesPlots = new();
 
         #region Свойства
 
@@ -287,6 +301,12 @@ namespace Regulyators.UI.ViewModels
                     : "Ожидание подключения к оборудованию...");
 
             _loggingService.LogInfo("График инициализирован и готов к получению данных");
+
+            // ★ Изменение: инициализируем DispatcherTimer для периодического обновления графика
+            _uiUpdateTimer = new DispatcherTimer();
+            _uiUpdateTimer.Interval = TimeSpan.FromMilliseconds(500); // можно 200мс, 1000мс и т.д.
+            _uiUpdateTimer.Tick += (s, e) => OnUiUpdateTimerTick();
+            _uiUpdateTimer.Start();
         }
 
         /// <summary>
@@ -366,53 +386,45 @@ namespace Regulyators.UI.ViewModels
                 _mainPlot.Configuration.ScrollWheelZoom = true;
                 _mainPlot.Configuration.LockVerticalAxis = false;
 
-                // Настройка обработчиков событий для отключения автоскролла
-                _mainPlot.MouseDown += (sender, e) => {
-                    if (e.ChangedButton == MouseButton.Left || e.ChangedButton == MouseButton.Right)
+                // ★ Изменение: включаем очередь рендеринга (опционально)
+                _mainPlot.Configuration.UseRenderQueue = true;
+
+                // Настройка обработчиков для отключения автоскролла при ручном масштабировании/прокрутке
+                _mainPlot.MouseDown += (sender, e) =>
+                {
+                    if (e.ChangedButton == System.Windows.Input.MouseButton.Left || e.ChangedButton == System.Windows.Input.MouseButton.Right)
                         AutoScroll = false;
                 };
-
                 _mainPlot.MouseWheel += (sender, e) => AutoScroll = false;
 
                 // Создаем начальные пустые серии для графика
                 foreach (var series in _seriesColors.Keys)
                 {
                     Color color = _seriesColors[series];
-                    var drawingColor = System.Drawing.Color.FromArgb(
-                        color.A, color.R, color.G, color.B);
+                    var drawingColor = System.Drawing.Color.FromArgb(color.A, color.R, color.G, color.B);
 
-                    // Создаем пустую серию
                     var scatter = _mainPlot.Plot.AddScatter(
-                        new double[] { 0 },
+                        new double[] { 0 }, 
                         new double[] { 0 },
                         drawingColor,
                         label: series);
 
+
                     scatter.LineWidth = 2;
                     scatter.MarkerSize = 0;
-
-                    // Устанавливаем начальную видимость серии
-                    bool isVisible = false;
-                    switch (series)
+                    scatter.IsVisible = series switch
                     {
-                        case "Обороты двигателя":
-                            isVisible = ShowEngineSpeed;
-                            break;
-                        case "Обороты турбокомпрессора":
-                            isVisible = ShowTurboSpeed;
-                            break;
-                        case "Давление масла":
-                            isVisible = ShowOilPressure;
-                            break;
-                        case "Давление наддува":
-                            isVisible = ShowBoostPressure;
-                            break;
-                        case "Температура масла":
-                            isVisible = ShowOilTemperature;
-                            break;
-                    }
-                    scatter.IsVisible = isVisible;
+                        "Обороты двигателя" => ShowEngineSpeed,
+                        "Обороты турбокомпрессора" => ShowTurboSpeed,
+                        "Давление масла" => ShowOilPressure,
+                        "Давление наддува" => ShowBoostPressure,
+                        "Температура масла" => ShowOilTemperature,
+                        _ => false
+                    };
+
+                    _seriesPlots[series] = scatter;
                 }
+
 
                 // Настройка легенды
                 _mainPlot.Plot.Legend(location: Alignment.UpperRight);
@@ -457,9 +469,9 @@ namespace Regulyators.UI.ViewModels
                     return;
                 }
 
+                // При первом получении данных обновляем UI (IsConnected, StatusMessage) - если нужно
                 Application.Current.Dispatcher.Invoke(() =>
                 {
-                    // Устанавливаем статус подключения, если ещё не установлен
                     if (!IsConnected)
                     {
                         IsConnected = true;
@@ -468,7 +480,7 @@ namespace Regulyators.UI.ViewModels
                             : "Подключено к оборудованию";
                     }
 
-                    // Обновляем параметры двигателя
+                    // Для отображения в интерфейсе можем сразу обновить значения
                     EngineParameters.EngineSpeed = parameters.EngineSpeed;
                     EngineParameters.TurboCompressorSpeed = parameters.TurboCompressorSpeed;
                     EngineParameters.OilPressure = parameters.OilPressure;
@@ -477,22 +489,16 @@ namespace Regulyators.UI.ViewModels
                     EngineParameters.RackPosition = parameters.RackPosition;
                     EngineParameters.Timestamp = parameters.Timestamp;
 
-                    // Добавляем новую точку на график
-                    _elapsedTime += 0.5; // Увеличиваем на 0.5 сек
-
-                    // Добавляем данные в коллекции
-                    AddDataPoint("Обороты двигателя", parameters.EngineSpeed);
-                    AddDataPoint("Обороты турбокомпрессора", parameters.TurboCompressorSpeed);
-                    AddDataPoint("Давление масла", parameters.OilPressure);
-                    AddDataPoint("Давление наддува", parameters.BoostPressure);
-                    AddDataPoint("Температура масла", parameters.OilTemperature);
-
-                    // Обновляем график
-                    UpdateGraph();
-
-                    // Обновляем статус
-                    StatusMessage = $"Данные обновлены: {parameters.Timestamp:HH:mm:ss}, Обороты: {parameters.EngineSpeed:F0}, Масло: {parameters.OilPressure:F2}";
+                    StatusMessage = $"Данные обновлены: {parameters.Timestamp:HH:mm:ss}, " +
+                                    $"Обороты: {parameters.EngineSpeed:F0}, " +
+                                    $"Масло: {parameters.OilPressure:F2}";
                 });
+
+                // ★ Изменение: вместо немедленного UpdateGraph() просто складываем данные в буфер
+                lock (_bufferLock)
+                {
+                    _incomingDataBuffer.Add(parameters);
+                }
             }
             catch (Exception ex)
             {
@@ -501,22 +507,64 @@ namespace Regulyators.UI.ViewModels
         }
 
         /// <summary>
+        /// Метод таймера, который раз в N мс обновляет график
+        /// </summary>
+        private void OnUiUpdateTimerTick()
+        {
+            // 1) Извлекаем накопленные данные из буфера
+            List<EngineParameters> newData = null;
+            lock (_bufferLock)
+            {
+                if (_incomingDataBuffer.Count > 0)
+                {
+                    newData = new List<EngineParameters>(_incomingDataBuffer);
+                    _incomingDataBuffer.Clear();
+                }
+            }
+
+            if (newData == null || newData.Count == 0)
+            {
+                // Нет новых точек - ничего не делаем
+                return;
+            }
+
+            // 2) Добавляем точки в наши коллекции
+            foreach (var p in newData)
+            {
+                if (_startTime == null)
+                    _startTime = p.Timestamp;
+
+                double x = (p.Timestamp - _startTime.Value).TotalSeconds;
+
+                AddDataPoint("Обороты двигателя", x, p.EngineSpeed);
+                AddDataPoint("Обороты турбокомпрессора", x, p.TurboCompressorSpeed);
+                AddDataPoint("Давление масла", x, p.OilPressure);
+                AddDataPoint("Давление наддува", x, p.BoostPressure);
+                AddDataPoint("Температура масла", x, p.OilTemperature);
+
+            }
+
+            // 3) Обновляем график один раз
+            UpdateGraph();
+        }
+
+        /// <summary>
         /// Добавление точки данных на график
         /// </summary>
-        private void AddDataPoint(string series, double value)
+        private void AddDataPoint(string series, double x, double y)
         {
             if (!_xData.ContainsKey(series) || !_yData.ContainsKey(series))
                 return;
 
-            _xData[series].Add(_elapsedTime);
-            _yData[series].Add(value);
+            _xData[series].Add(x);
+            _yData[series].Add(y);
 
-            // Ограничиваем количество точек
             if (_xData[series].Count > MAX_POINTS)
             {
                 _xData[series].RemoveAt(0);
                 _yData[series].RemoveAt(0);
             }
+
         }
 
         /// <summary>
@@ -594,37 +642,34 @@ namespace Regulyators.UI.ViewModels
             try
             {
                 // Обновляем данные для каждой серии
-                var scatterPlots = _mainPlot.Plot.GetPlottables().OfType<ScottPlot.Plottable.ScatterPlot>().ToList();
+                var scatterPlots = _mainPlot.Plot.GetPlottables()
+                    .OfType<ScottPlot.Plottable.ScatterPlot>().ToList();
 
-                foreach (var scatter in scatterPlots)
+                foreach (var series in _seriesColors.Keys)
                 {
-                    string seriesName = scatter.Label;
-                    if (_xData.ContainsKey(seriesName) && _yData.ContainsKey(seriesName) &&
-                        _xData[seriesName].Count > 0 && _yData[seriesName].Count > 0)
+                    if (!_seriesPlots.ContainsKey(series)) continue;
+
+                    var scatter = _seriesPlots[series];
+
+
+
+                    if (_xData[series].Count > 0 && _yData[series].Count > 0)
                     {
-                        scatter.Update(_xData[seriesName].ToArray(), _yData[seriesName].ToArray());
+                        scatter.Update(_xData[series].ToArray(), _yData[series].ToArray());
                     }
 
-                    // Устанавливаем видимость серии
-                    switch (seriesName)
+
+                    scatter.IsVisible = series switch
                     {
-                        case "Обороты двигателя":
-                            scatter.IsVisible = ShowEngineSpeed;
-                            break;
-                        case "Обороты турбокомпрессора":
-                            scatter.IsVisible = ShowTurboSpeed;
-                            break;
-                        case "Давление масла":
-                            scatter.IsVisible = ShowOilPressure;
-                            break;
-                        case "Давление наддува":
-                            scatter.IsVisible = ShowBoostPressure;
-                            break;
-                        case "Температура масла":
-                            scatter.IsVisible = ShowOilTemperature;
-                            break;
-                    }
+                        "Обороты двигателя" => ShowEngineSpeed,
+                        "Обороты турбокомпрессора" => ShowTurboSpeed,
+                        "Давление масла" => ShowOilPressure,
+                        "Давление наддува" => ShowBoostPressure,
+                        "Температура масла" => ShowOilTemperature,
+                        _ => false
+                    };
                 }
+
 
                 // Обновляем линии порогов защит
                 UpdateThresholdLines();
@@ -759,14 +804,18 @@ namespace Regulyators.UI.ViewModels
 
                 // Сбрасываем таймер
                 _elapsedTime = 0;
+                _startTime = null;
+
+                // Очищаем буфер входящих данных
+                lock (_bufferLock)
+                {
+                    _incomingDataBuffer.Clear();
+                }
 
                 // Обновляем график
                 if (_isGraphInitialized && _mainPlot != null)
                 {
-                    // Обновляем серии данных (пустые)
                     UpdateGraph();
-
-                    // Сбрасываем границы осей
                     _mainPlot.Plot.SetAxisLimits(0, 30, 0, 2000);
                     _mainPlot.Refresh();
                 }
@@ -794,7 +843,6 @@ namespace Regulyators.UI.ViewModels
 
             try
             {
-                // Создаем диалог сохранения файла
                 var dialog = new SaveFileDialog
                 {
                     DefaultExt = ".png",
@@ -802,10 +850,8 @@ namespace Regulyators.UI.ViewModels
                     Title = "Сохранение графика как изображения"
                 };
 
-                // Если пользователь выбрал файл
                 if (dialog.ShowDialog() == true)
                 {
-                    // Сохраняем график в файл
                     _mainPlot.Plot.SaveFig(dialog.FileName);
                     _loggingService.LogInfo("График сохранен в файл", dialog.FileName);
                     StatusMessage = "График сохранен как изображение";
@@ -819,109 +865,64 @@ namespace Regulyators.UI.ViewModels
         }
 
         /// <summary>
-        /// Экспорт данных в Excel (CSV формат)
+        /// Экспортирует текущий вид (изображение) графика в Excel-файл.
+        /// Использует библиотеку ClosedXML (бесплатная, MIT лицензия).
         /// </summary>
         private void ExportExcel()
         {
+            if (!_isGraphInitialized || _mainPlot == null)
+            {
+                StatusMessage = "График не инициализирован";
+                return;
+            }
+
             try
             {
-                // Проверяем наличие данных
-                bool hasData = false;
-                foreach (var series in _xData.Keys)
+                // Выбираем, куда сохранить Excel
+                var dialog = new Microsoft.Win32.SaveFileDialog
                 {
-                    if (_xData[series].Count > 0)
-                    {
-                        hasData = true;
-                        break;
-                    }
-                }
-
-                if (!hasData)
-                {
-                    StatusMessage = "Нет данных для экспорта";
-                    return;
-                }
-
-                // Создаем диалог сохранения файла
-                var dialog = new SaveFileDialog
-                {
-                    DefaultExt = ".csv",
-                    Filter = "CSV Files (*.csv)|*.csv|All Files (*.*)|*.*",
-                    Title = "Экспорт данных графика в Excel (CSV)"
+                    DefaultExt = ".xlsx",
+                    Filter = "Excel Files (*.xlsx)|*.xlsx|All Files (*.*)|*.*",
+                    Title = "Экспорт графика в Excel (как изображение)"
                 };
 
-                // Если пользователь выбрал файл
-                if (dialog.ShowDialog() == true)
+                if (dialog.ShowDialog() != true)
+                    return; // пользователь отменил
+
+                using (var workbook = new XLWorkbook())
                 {
-                    // Создаем CSV-файл
-                    using (var writer = new StreamWriter(dialog.FileName, false, Encoding.UTF8))
+                    var worksheet = workbook.Worksheets.Add("Chart");
+
+                    // 1) Сохраняем график во ВРЕМЕННЫЙ PNG-файл
+                    string tempFile = System.IO.Path.GetTempFileName() + ".png";
+                    _mainPlot.Plot.SaveFig(tempFile);
+
+                    // 2) Загружаем файл в MemoryStream
+                    byte[] fileBytes = File.ReadAllBytes(tempFile);
+                    using (var ms = new MemoryStream(fileBytes))
                     {
-                        // Записываем заголовки колонок
-                        var headers = new List<string> { "Время" };
-                        foreach (var series in _seriesColors.Keys)
-                        {
-                            headers.Add(series);
-                        }
-                        writer.WriteLine(string.Join(";", headers));
-
-                        // Собираем все уникальные значения времени
-                        var allTimes = new HashSet<double>();
-                        foreach (var series in _xData.Keys)
-                        {
-                            foreach (var time in _xData[series])
-                            {
-                                allTimes.Add(time);
-                            }
-                        }
-
-                        // Сортируем их
-                        var sortedTimes = allTimes.OrderBy(t => t).ToList();
-
-                        // Для каждого времени записываем строку данных
-                        foreach (var time in sortedTimes)
-                        {
-                            var values = new List<string> { time.ToString("F1") };
-
-                            foreach (var series in _seriesColors.Keys)
-                            {
-                                // Находим индекс времени в соответствующей серии
-                                int index = _xData[series].IndexOf(time);
-                                if (index >= 0 && index < _yData[series].Count)
-                                {
-                                    // Добавляем значение, если оно существует
-                                    double value = _yData[series][index];
-
-                                    // Форматируем в зависимости от типа данных
-                                    string formattedValue;
-                                    if (series == "Обороты двигателя" || series == "Обороты турбокомпрессора")
-                                        formattedValue = value.ToString("F0");
-                                    else if (series == "Температура масла")
-                                        formattedValue = value.ToString("F1");
-                                    else
-                                        formattedValue = value.ToString("F2");
-
-                                    values.Add(formattedValue);
-                                }
-                                else
-                                {
-                                    // Если нет данных, записываем пустую ячейку
-                                    values.Add(""); 
-                                }
-                            }
-
-                            // Записываем строку в файл
-                            writer.WriteLine(string.Join(";", values));
-                        }
+                        // 3) Добавляем картинку из Stream
+                        // Второй аргумент - «имя картинки» (любая строка)
+                        // NOTE: Никаких XLPictureFormat здесь не используем
+                        var pic = worksheet.AddPicture(ms, "ChartImage")
+                                           .MoveTo(worksheet.Cell(1, 1)) // вставка в A1
+                                           .WithSize(800, 600);          // ширина/высота в пикселях
                     }
 
-                    _loggingService.LogInfo("Данные графика экспортированы в CSV (Excel)", dialog.FileName);
-                    StatusMessage = "Данные экспортированы в Excel (CSV)";
+                    // (Опционально) удаляем временный файл
+                    File.Delete(tempFile);
+
+                    // 4) Сохраняем Excel
+                    workbook.SaveAs(dialog.FileName);
                 }
+
+                StatusMessage = "График экспортирован в Excel как изображение";
+                _loggingService.LogInfo("График успешно встроен в Excel", dialog.FileName);
             }
             catch (Exception ex)
             {
-                _loggingService.LogError("Ошибка при экспорте данных в Excel", ex.Message);
-                StatusMessage = "Ошибка при экспорте данных в Excel";
+                _loggingService.LogError("Ошибка при экспорте графика в Excel", ex.Message);
+                StatusMessage = "Ошибка при экспорте графика в Excel";
             }
         }
 
@@ -935,7 +936,6 @@ namespace Regulyators.UI.ViewModels
 
             try
             {
-                // Автоматически настраиваем масштаб графика
                 _mainPlot.Plot.AxisAuto();
                 _mainPlot.Refresh();
                 StatusMessage = "Автоматическое масштабирование графика выполнено";
@@ -974,6 +974,10 @@ namespace Regulyators.UI.ViewModels
                     _simulationService.SimulationStatusChanged -= OnSimulationStatusChanged;
                     _simulationService.ParametersUpdated -= OnSimulationParametersUpdated;
                 }
+
+                // Остановить и убрать таймер
+                _uiUpdateTimer?.Stop();
+                _uiUpdateTimer = null;
 
                 // Очистка ссылок на объекты графика
                 _mainPlot = null;

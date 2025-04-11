@@ -570,7 +570,7 @@ namespace Regulyators.UI.ViewModels
                     EngineSpeedCurrent = parameters.EngineSpeed;
                     BoostPressureCurrent = parameters.BoostPressure;
                     OilTemperatureCurrent = parameters.OilTemperature;
-
+                        
                     LastUpdateTime = parameters.Timestamp;
                     StatusMessage = "Данные обновлены";
                 });
