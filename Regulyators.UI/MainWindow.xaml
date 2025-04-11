@@ -7,11 +7,19 @@
     xmlns:local="clr-namespace:Regulyators.UI"
     xmlns:viewmodels="clr-namespace:Regulyators.UI.ViewModels"
     xmlns:converters="clr-namespace:Regulyators.UI.Converters"
+    xmlns:materialDesign="http://materialdesigninxaml.net/winfx/xaml/themes"
     mc:Ignorable="d"
     Title="Система испытаний регуляторов ЭРЧМ30ТЗ" 
     Height="850" 
-    Width="1100"
-    WindowStartupLocation="CenterScreen">
+    Width="1360"
+    WindowStartupLocation="CenterScreen"
+    TextElement.Foreground="{DynamicResource MaterialDesignBody}"
+    TextElement.FontWeight="Regular"
+    TextElement.FontSize="13"
+    TextOptions.TextFormattingMode="Ideal" 
+    TextOptions.TextRenderingMode="Auto"
+    Background="{DynamicResource MaterialDesignPaper}"
+    FontFamily="{materialDesign:MaterialDesignFont}">
 
     <Window.Resources>
         <converters:ValueToVisibilityConverter x:Key="BoolToVisibilityConverter"/>
@@ -21,119 +29,126 @@
         <viewmodels:MainViewModel />
     </Window.DataContext>
 
-    <Grid>
-        <Grid.RowDefinitions>
-            <RowDefinition Height="Auto" />
-            <RowDefinition Height="*" />
-            <RowDefinition Height="Auto" />
-        </Grid.RowDefinitions>
+    <materialDesign:DialogHost Identifier="RootDialog" SnackbarMessageQueue="{Binding ElementName=MainSnackbar, Path=MessageQueue}">
+        <Grid>
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="*" />
+                <RowDefinition Height="Auto" />
+            </Grid.RowDefinitions>
 
-        <!-- Верхняя панель с заголовком и индикатором соединения -->
-        <Border 
-            Grid.Row="0" 
-            Background="#2196F3" 
-            Padding="16">
-            <DockPanel>
-                <TextBlock 
-                    Text="Система испытаний регуляторов ЭРЧМ30ТЗ" 
-                    FontSize="18" 
-                    FontWeight="Bold" 
-                    Foreground="White"
-                    DockPanel.Dock="Left" />
+            <!-- App Bar -->
+            <materialDesign:ColorZone Grid.Row="0" Mode="PrimaryMid" Padding="16" materialDesign:ShadowAssist.ShadowDepth="Depth2">
+                <DockPanel>
+                    <StackPanel Orientation="Horizontal" DockPanel.Dock="Left">
+                        <materialDesign:PackIcon Kind="Engine" Width="24" Height="24" VerticalAlignment="Center" Margin="0,0,8,0"/>
+                        <TextBlock 
+                            Text="Система испытаний регуляторов ЭРЧМ30ТЗ" 
+                            FontSize="18" 
+                            FontWeight="Bold" 
+                            VerticalAlignment="Center" />
+                    </StackPanel>
 
-                <StackPanel 
-                    Orientation="Horizontal" 
-                    HorizontalAlignment="Right">
+                    <StackPanel 
+                        Orientation="Horizontal" 
+                        HorizontalAlignment="Right">
+                        <TextBlock 
+                            Text="{Binding ConnectionStatus}" 
+                            VerticalAlignment="Center" 
+                            Margin="0,0,8,0" />
+                        <Ellipse 
+                            Width="16" 
+                            Height="16" 
+                            Fill="{Binding ConnectionStatusColor}" 
+                            VerticalAlignment="Center" />
+                    </StackPanel>
+                </DockPanel>
+            </materialDesign:ColorZone>
+
+            <!-- Основное содержимое -->
+            <Grid Grid.Row="1">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="*" />
+                </Grid.ColumnDefinitions>
+
+                <!-- Боковое меню -->
+                <materialDesign:Card Grid.Column="0" Margin="16" MinWidth="220" Padding="8" materialDesign:ShadowAssist.ShadowDepth="Depth1">
+                    <ListView 
+                        ItemsSource="{Binding MenuItems}" 
+                        SelectedItem="{Binding SelectedMenuItem}"
+                        BorderThickness="0">
+                        <ListView.ItemTemplate>
+                            <DataTemplate>
+                                <StackPanel Orientation="Horizontal">
+                                    <materialDesign:PackIcon Kind="ViewDashboard" Width="24" Height="24" VerticalAlignment="Center" Margin="0,0,16,0"/>
+                                    <TextBlock Text="{Binding Title}" VerticalAlignment="Center" />
+                                </StackPanel>
+                            </DataTemplate>
+                        </ListView.ItemTemplate>
+                    </ListView>
+                </materialDesign:Card>
+
+                <!-- Область контента -->
+                <materialDesign:Card Grid.Column="1" Margin="0,16,16,16" materialDesign:ShadowAssist.ShadowDepth="Depth1">
+                    <ContentControl 
+                        Content="{Binding CurrentView}" 
+                        Margin="8" />
+                </materialDesign:Card>
+            </Grid>
+
+            <!-- Строка состояния -->
+            <materialDesign:ColorZone
+                Grid.Row="2" 
+                Mode="Standard" 
+                Padding="8">
+                <DockPanel>
                     <TextBlock 
-                        Text="{Binding ConnectionStatus}" 
-                        Foreground="White" 
-                        VerticalAlignment="Center" 
-                        Margin="0,0,8,0" />
-                    <Ellipse 
-                        Width="16" 
-                        Height="16" 
-                        Fill="{Binding ConnectionStatusColor}" 
-                        VerticalAlignment="Center" />
-                </StackPanel>
-            </DockPanel>
-        </Border>
+                        Text="{Binding StatusMessage}" 
+                        DockPanel.Dock="Left" />
 
-        <!-- Основное содержимое -->
-        <Grid Grid.Row="1">
-            <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="200" />
-                <ColumnDefinition Width="*" />
-            </Grid.ColumnDefinitions>
+                    <TextBlock 
+                        Text="{Binding CurrentDateTime, StringFormat='{}{0:dd.MM.yyyy HH:mm:ss}'}" 
+                        HorizontalAlignment="Right" />
+                </DockPanel>
+            </materialDesign:ColorZone>
 
-            <!-- Боковое меню -->
-            <Border Grid.Column="0" Background="#F5F5F5">
-                <ListBox 
-                    ItemsSource="{Binding MenuItems}" 
-                    SelectedItem="{Binding SelectedMenuItem}"
-                    Margin="8">
-                    <ListBox.ItemTemplate>
-                        <DataTemplate>
-                            <TextBlock Text="{Binding Title}" Padding="8,4" />
-                        </DataTemplate>
-                    </ListBox.ItemTemplate>
-                </ListBox>
-            </Border>
-
-            <!-- Область контента -->
-            <ContentControl 
-                Grid.Column="1" 
-                Content="{Binding CurrentView}" 
-                Margin="8" />
-        </Grid>
-
-        <!-- Строка состояния -->
-        <Border 
-            Grid.Row="2" 
-            Background="#E0E0E0" 
-            Padding="8">
-            <DockPanel>
-                <TextBlock 
-                    Text="{Binding StatusMessage}" 
-                    DockPanel.Dock="Left" />
-
-                <TextBlock 
-                    Text="{Binding CurrentDateTime, StringFormat='{}{0:dd.MM.yyyy HH:mm:ss}'}" 
-                    HorizontalAlignment="Right" />
-            </DockPanel>
-        </Border>
-
-        <!-- Индикатор занятости (перекрывает весь UI) -->
-        <Border 
-            Grid.RowSpan="3"
-            Background="#80000000" 
-            Visibility="{Binding IsBusy, Converter={StaticResource BoolToVisibilityConverter}}"
-            Panel.ZIndex="1000">
-            <Border 
-                Background="White" 
-                Width="300" 
-                Height="120" 
-                CornerRadius="8" 
-                HorizontalAlignment="Center" 
-                VerticalAlignment="Center">
-                <Border.Effect>
-                    <DropShadowEffect BlurRadius="10" ShadowDepth="5" Opacity="0.3" />
-                </Border.Effect>
-                <StackPanel 
+            <!-- Индикатор занятости -->
+            <Grid 
+                Grid.RowSpan="3"
+                Background="#80000000" 
+                Visibility="{Binding IsBusy, Converter={StaticResource BoolToVisibilityConverter}}"
+                Panel.ZIndex="1000">
+                <materialDesign:Card 
+                    Width="300" 
+                    Height="120" 
                     HorizontalAlignment="Center" 
-                    VerticalAlignment="Center" 
-                    Margin="20">
-                    <TextBlock 
-                        Text="{Binding BusyMessage}" 
+                    VerticalAlignment="Center"
+                    Padding="16"
+                    materialDesign:ShadowAssist.ShadowDepth="Depth3">
+                    <StackPanel 
                         HorizontalAlignment="Center" 
-                        Margin="0,0,0,15"
-                        FontSize="14"/>
-                    <ProgressBar 
-                        IsIndeterminate="True" 
-                        Width="250" 
-                        Height="8" 
-                        Foreground="#2196F3"/>
-                </StackPanel>
-            </Border>
-        </Border>
-    </Grid>
+                        VerticalAlignment="Center">
+                        <TextBlock 
+                            Text="{Binding BusyMessage}" 
+                            HorizontalAlignment="Center" 
+                            Margin="0,0,0,16"
+                            FontSize="14"/>
+                        <ProgressBar 
+                            IsIndeterminate="True" 
+                            Width="250" 
+                            Height="4" 
+                            Style="{StaticResource MaterialDesignLinearProgressBar}"/>
+                    </StackPanel>
+                </materialDesign:Card>
+            </Grid>
+
+            <!-- Snackbar для уведомлений -->
+            <materialDesign:Snackbar 
+                Grid.Row="1" 
+                x:Name="MainSnackbar" 
+                MessageQueue="{materialDesign:MessageQueue}" 
+                VerticalAlignment="Bottom"/>
+        </Grid>
+    </materialDesign:DialogHost>
 </Window>

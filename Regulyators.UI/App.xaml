@@ -6,10 +6,15 @@
     xmlns:viewmodels="clr-namespace:Regulyators.UI.ViewModels"
     xmlns:views="clr-namespace:Regulyators.UI.Views"
     xmlns:converters="clr-namespace:Regulyators.UI.Converters"
+    xmlns:materialDesign="http://materialdesigninxaml.net/winfx/xaml/themes"
     StartupUri="MainWindow.xaml">
     <Application.Resources>
         <ResourceDictionary>
             <ResourceDictionary.MergedDictionaries>
+                <!-- Material Design Themes -->
+                <materialDesign:BundledTheme BaseTheme="Light" PrimaryColor="Blue" SecondaryColor="LightBlue" />
+                <ResourceDictionary Source="pack://application:,,,/MaterialDesignThemes.Wpf;component/Themes/MaterialDesignTheme.Defaults.xaml" />
+
                 <!-- Ссылка на стили GaugeControl -->
                 <ResourceDictionary Source="/Resources/GaugeStyles.xaml"/>
             </ResourceDictionary.MergedDictionaries>
@@ -58,79 +63,29 @@
                 <views:SimulationView />
             </DataTemplate>
 
-            <!-- Стили для элементов управления -->
-            <Style x:Key="HeaderTextBlockStyle" TargetType="TextBlock">
-                <Setter Property="FontSize" Value="18"/>
-                <Setter Property="FontWeight" Value="Bold"/>
+            <!-- Материальные стили для элементов управления -->
+            <Style x:Key="HeaderTextBlockStyle" TargetType="TextBlock" 
+                   BasedOn="{StaticResource MaterialDesignHeadline5TextBlock}">
                 <Setter Property="Margin" Value="0,0,0,16"/>
             </Style>
 
-            <Style x:Key="SubHeaderTextBlockStyle" TargetType="TextBlock">
-                <Setter Property="FontSize" Value="16"/>
-                <Setter Property="FontWeight" Value="SemiBold"/>
+            <Style x:Key="SubHeaderTextBlockStyle" TargetType="TextBlock" 
+                   BasedOn="{StaticResource MaterialDesignHeadline6TextBlock}">
                 <Setter Property="Margin" Value="0,0,0,8"/>
             </Style>
 
-            <Style x:Key="PrimaryButtonStyle" TargetType="Button">
-                <Setter Property="Background" Value="#2196F3"/>
-                <Setter Property="Foreground" Value="White"/>
+            <Style x:Key="PrimaryButtonStyle" TargetType="Button" 
+                   BasedOn="{StaticResource MaterialDesignRaisedButton}">
                 <Setter Property="Padding" Value="16,8"/>
-                <Setter Property="BorderThickness" Value="0"/>
-                <Setter Property="Template">
-                    <Setter.Value>
-                        <ControlTemplate TargetType="Button">
-                            <Border 
-                                Background="{TemplateBinding Background}" 
-                                BorderBrush="{TemplateBinding BorderBrush}" 
-                                BorderThickness="{TemplateBinding BorderThickness}"
-                                CornerRadius="4">
-                                <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
-                            </Border>
-                        </ControlTemplate>
-                    </Setter.Value>
-                </Setter>
-                <Style.Triggers>
-                    <Trigger Property="IsMouseOver" Value="True">
-                        <Setter Property="Background" Value="#1976D2"/>
-                    </Trigger>
-                    <Trigger Property="IsPressed" Value="True">
-                        <Setter Property="Background" Value="#0D47A1"/>
-                    </Trigger>
-                    <Trigger Property="IsEnabled" Value="False">
-                        <Setter Property="Background" Value="#BDBDBD"/>
-                    </Trigger>
-                </Style.Triggers>
+                <Setter Property="materialDesign:ButtonAssist.CornerRadius" Value="4"/>
             </Style>
 
-            <Style x:Key="DangerButtonStyle" TargetType="Button">
-                <Setter Property="Background" Value="#F44336"/>
-                <Setter Property="Foreground" Value="White"/>
+            <Style x:Key="DangerButtonStyle" TargetType="Button" 
+                   BasedOn="{StaticResource MaterialDesignRaisedAccentButton}">
                 <Setter Property="Padding" Value="16,8"/>
-                <Setter Property="BorderThickness" Value="0"/>
-                <Setter Property="Template">
-                    <Setter.Value>
-                        <ControlTemplate TargetType="Button">
-                            <Border 
-                                Background="{TemplateBinding Background}" 
-                                BorderBrush="{TemplateBinding BorderBrush}" 
-                                BorderThickness="{TemplateBinding BorderThickness}"
-                                CornerRadius="4">
-                                <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
-                            </Border>
-                        </ControlTemplate>
-                    </Setter.Value>
-                </Setter>
-                <Style.Triggers>
-                    <Trigger Property="IsMouseOver" Value="True">
-                        <Setter Property="Background" Value="#D32F2F"/>
-                    </Trigger>
-                    <Trigger Property="IsPressed" Value="True">
-                        <Setter Property="Background" Value="#B71C1C"/>
-                    </Trigger>
-                    <Trigger Property="IsEnabled" Value="False">
-                        <Setter Property="Background" Value="#BDBDBD"/>
-                    </Trigger>
-                </Style.Triggers>
+                <Setter Property="materialDesign:ButtonAssist.CornerRadius" Value="4"/>
+                <Setter Property="Background" Value="#F44336"/>
+                <Setter Property="BorderBrush" Value="#F44336"/>
             </Style>
         </ResourceDictionary>
     </Application.Resources>

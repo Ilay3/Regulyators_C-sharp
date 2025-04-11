@@ -194,6 +194,9 @@ namespace Regulyators.UI.Services
 
                 _loggingService.LogInfo("Остановка режима симуляции");
 
+                // Отправляем последнее значение с параметрами остановки перед отключением симуляции
+                SendFinalParameters();
+
                 IsSimulationRunning = false;
 
                 // Отменяем задачу симуляции
@@ -219,6 +222,52 @@ namespace Regulyators.UI.Services
                 _comPortService.SimulateConnection(false);
             }
         }
+
+        /// <summary>
+        /// Отправляет финальные параметры с нулевыми значениями перед остановкой симуляции
+        /// </summary>
+        private void SendFinalParameters()
+        {
+            try
+            {
+                // Сбрасываем важные параметры на нулевые значения
+                _engineSpeed = 0;
+                _targetEngineSpeed = 0;
+                _turboCompressorSpeed = 0;
+                _rackPosition = 0;
+                _engineMode = EngineMode.Stop;
+
+                // Поддерживаем некоторые параметры в реалистичных диапазонах
+                _oilPressure = 0;
+                _boostPressure = 0;
+                _oilTemperature = 25; // Комнатная температура
+
+                // Отправляем последнее обновление
+                var parameters = new EngineParameters
+                {
+                    EngineSpeed = _engineSpeed,
+                    TurboCompressorSpeed = _turboCompressorSpeed,
+                    OilPressure = _oilPressure,
+                    BoostPressure = _boostPressure,
+                    OilTemperature = _oilTemperature,
+                    RackPosition = _rackPosition,
+                    Timestamp = DateTime.Now
+                };
+
+                // Уведомляем подписчиков
+                ParametersUpdated?.Invoke(this, parameters);
+
+                // Отправляем данные через ComPortService
+                _comPortService.SimulateDataReceived(parameters);
+
+                _loggingService.LogInfo("Симуляция: отправлены финальные параметры перед остановкой");
+            }
+            catch (Exception ex)
+            {
+                _loggingService.LogError($"Ошибка при отправке финальных параметров: {ex.Message}", ex.StackTrace);
+            }
+        }
+
 
         /// <summary>
         /// Переключение режима симуляции

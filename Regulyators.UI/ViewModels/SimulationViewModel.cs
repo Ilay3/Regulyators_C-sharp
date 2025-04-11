@@ -150,9 +150,11 @@ namespace Regulyators.UI.ViewModels
             // Инициализация начальных значений
             _isSimulationRunning = _simulationService.IsSimulationRunning;
             _statusMessage = "Готов к запуску симуляции";
-            _isRandomFailures = false;
-            _isStressTest = false;
-            _selectedScenario = "Стандартный";
+
+            // Синхронизируем начальные значения с сервисом
+            _isRandomFailures = _simulationService.RandomFailures;
+            _isStressTest = _simulationService.StressTest;
+            _selectedScenario = _simulationService.SimulationScenario;
 
             // Инициализация команд
             ToggleSimulationCommand = new RelayCommand(ToggleSimulation, () => IsButtonEnabled);
@@ -176,16 +178,19 @@ namespace Regulyators.UI.ViewModels
                 if (_isSimulationRunning)
                 {
                     StatusMessage = "Останавливаем симуляцию...";
+
+                    // Сохраняем текущие настройки перед остановкой
+                    SaveCurrentSettings();
+
                     _simulationService.StopSimulation();
                     StatusMessage = "Симуляция остановлена";
                 }
                 else
                 {
                     StatusMessage = "Запускаем симуляцию...";
-                    // Настраиваем параметры симуляции
-                    _simulationService.RandomFailures = _isRandomFailures;
-                    _simulationService.StressTest = _isStressTest;
-                    _simulationService.SimulationScenario = _selectedScenario;
+
+                    // Применяем настройки к сервису
+                    ApplySettingsToService();
 
                     // Запускаем симуляцию
                     _simulationService.StartSimulation();
@@ -204,6 +209,32 @@ namespace Regulyators.UI.ViewModels
             {
                 // Разблокируем кнопки
                 IsButtonEnabled = true;
+            }
+        }
+
+        /// <summary>
+        /// Сохраняет текущие настройки ViewModel в SimulationService
+        /// </summary>
+        private void SaveCurrentSettings()
+        {
+            if (_simulationService != null)
+            {
+                _simulationService.RandomFailures = _isRandomFailures;
+                _simulationService.StressTest = _isStressTest;
+                _simulationService.SimulationScenario = _selectedScenario;
+            }
+        }
+
+        /// <summary>
+        /// Применяет настройки к сервису
+        /// </summary>
+        private void ApplySettingsToService()
+        {
+            if (_simulationService != null)
+            {
+                _simulationService.RandomFailures = _isRandomFailures;
+                _simulationService.StressTest = _isStressTest;
+                _simulationService.SimulationScenario = _selectedScenario;
             }
         }
 
@@ -276,6 +307,9 @@ namespace Regulyators.UI.ViewModels
                 IsButtonEnabled = false;
                 StatusMessage = "Сброс симуляции...";
 
+                // Сохраняем текущие настройки перед сбросом
+                SaveCurrentSettings();
+
                 // Если симуляция активна, останавливаем ее
                 if (_isSimulationRunning)
                 {
@@ -286,9 +320,7 @@ namespace Regulyators.UI.ViewModels
                 await Task.Delay(1000);
 
                 // Применяем настройки
-                _simulationService.RandomFailures = _isRandomFailures;
-                _simulationService.StressTest = _isStressTest;
-                _simulationService.SimulationScenario = _selectedScenario;
+                ApplySettingsToService();
 
                 // Запускаем симуляцию
                 _simulationService.StartSimulation();
@@ -313,14 +345,17 @@ namespace Regulyators.UI.ViewModels
         /// </summary>
         private void ApplySelectedScenario()
         {
+            // Сохраняем выбранный сценарий в сервисе даже если симуляция не запущена
+            if (_simulationService != null)
+            {
+                _simulationService.SimulationScenario = _selectedScenario;
+            }
+
             if (!_isSimulationRunning)
             {
                 StatusMessage = $"Сценарий '{_selectedScenario}' будет применен при запуске симуляции";
                 return;
             }
-
-            // Устанавливаем сценарий
-            _simulationService.SimulationScenario = _selectedScenario;
 
             StatusMessage = $"Применен сценарий симуляции: {_selectedScenario}";
             _loggingService.LogInfo($"Сменен сценарий симуляции на: {_selectedScenario}");
@@ -332,6 +367,23 @@ namespace Regulyators.UI.ViewModels
         private void OnSimulationStatusChanged(object sender, bool isRunning)
         {
             IsSimulationRunning = isRunning;
+
+            // Если симуляция была запущена, убедимся, что настройки синхронизированы
+            if (isRunning)
+            {
+                // Синхронизируем настройки с сервисом
+                if (_simulationService != null)
+                {
+                    _isRandomFailures = _simulationService.RandomFailures;
+                    _isStressTest = _simulationService.StressTest;
+                    _selectedScenario = _simulationService.SimulationScenario;
+
+                    // Уведомляем UI об изменениях
+                    OnPropertyChanged(nameof(IsRandomFailures));
+                    OnPropertyChanged(nameof(IsStressTest));
+                    OnPropertyChanged(nameof(SelectedScenario));
+                }
+            }
         }
     }
 }
