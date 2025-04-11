@@ -21,34 +21,30 @@ namespace Regulyators.UI.Views
                 if (DataContext is ImprovedChartViewModel viewModel)
                 {
                     _viewModel = viewModel;
-                    viewModel.InitializeGraph(MainPlot);
+                    _viewModel.InitializeGraph(MainPlot);
                 }
                 else
                 {
-                    // Если DataContext не установлен, создаем и используем свой ViewModel
+                    // Если DataContext не установлен, создаем новый ViewModel
                     _viewModel = new ImprovedChartViewModel();
                     DataContext = _viewModel;
                     _viewModel.InitializeGraph(MainPlot);
                 }
-
-                // При изменении размера обновляем график
-                MainPlot.SizeChanged += (sender, args) =>
-                {
-                    if (_viewModel != null)
-                    {
-                        MainPlot.Refresh();
-                    }
-                };
             };
 
-            // Обработчик выгрузки контрола
+            // Обработчик выгрузки контрола для освобождения ресурсов
             Unloaded += (s, e) =>
             {
-                // Вызываем метод очистки ресурсов у ViewModel
-                if (_viewModel != null)
+                try
                 {
-                    _viewModel.CleanUp();
+                    // Вызываем метод очистки ресурсов у ViewModel
+                    _viewModel?.CleanUp();
                     _viewModel = null;
+                }
+                catch (Exception ex)
+                {
+                    // Проглатываем любые исключения при закрытии
+                    System.Diagnostics.Debug.WriteLine($"Ошибка при выгрузке ImprovedChartView: {ex.Message}");
                 }
             };
         }
