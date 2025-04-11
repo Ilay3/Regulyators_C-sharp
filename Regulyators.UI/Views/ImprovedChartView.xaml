@@ -5,8 +5,13 @@
     xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006" 
     xmlns:d="http://schemas.microsoft.com/expression/blend/2008" 
     xmlns:local="clr-namespace:Regulyators.UI.Views"
+    xmlns:converters="clr-namespace:Regulyators.UI.Converters"
     mc:Ignorable="d" 
-    d:DesignHeight="600" Width="1408">
+    d:DesignHeight="600" d:DesignWidth="800">
+
+    <UserControl.Resources>
+        <converters:BooleanToBrushConverterExt x:Key="BooleanToBrushExt"/>
+    </UserControl.Resources>
 
     <Grid Margin="16">
         <Grid.RowDefinitions>
@@ -15,7 +20,7 @@
             <RowDefinition Height="Auto"/>
         </Grid.RowDefinitions>
 
-        <!-- Заголовок и статус -->
+        <!-- Заголовок -->
         <Grid Grid.Row="0" Margin="0,0,0,8">
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="Auto"/>
@@ -74,11 +79,9 @@
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="*"/>
                 <ColumnDefinition Width="Auto"/>
-                <ColumnDefinition Width="Auto"/>
-                <ColumnDefinition Width="Auto"/>
             </Grid.ColumnDefinitions>
 
-            <!-- Выбор параметров для отображения -->
+            <!-- Левая часть - управление отображением серий -->
             <StackPanel 
                 Grid.Column="0" 
                 Orientation="Horizontal" 
@@ -104,11 +107,13 @@
                     IsChecked="{Binding ShowOilTemperature}"/>
             </StackPanel>
 
-            <!-- Выбор временного интервала -->
+            <!-- Правая часть - временной интервал и кнопки -->
             <StackPanel 
                 Grid.Column="1" 
                 Orientation="Horizontal" 
                 HorizontalAlignment="Right">
+
+                <!-- Выбор временного интервала -->
                 <TextBlock 
                     Text="Интервал:" 
                     VerticalAlignment="Center"
@@ -116,26 +121,17 @@
                 <ComboBox 
                     ItemsSource="{Binding TimeIntervals}"
                     SelectedItem="{Binding SelectedTimeInterval}"
-                    Width="80"/>
-            </StackPanel>
+                    Width="80"
+                    Margin="0,0,16,0"/>
 
-            <!-- Кнопки управления графиком -->
-            <StackPanel 
-                Grid.Column="2" 
-                Orientation="Horizontal" 
-                HorizontalAlignment="Right"
-                Margin="16,0,0,0">
+                <!-- Автопрокрутка -->
                 <CheckBox 
                     Content="Автопрокрутка" 
                     IsChecked="{Binding AutoScroll}"
-                    Margin="0,0,8,0"
+                    Margin="0,0,16,0"
                     VerticalAlignment="Center"/>
-                <CheckBox 
-                    Content="Нормализовать" 
-                    IsChecked="{Binding NormalizeValues}"
-                    Margin="0,0,8,0"
-                    VerticalAlignment="Center"
-                    ToolTip="Масштабирование всех параметров в процентах от максимума"/>
+
+                <!-- Кнопки управления -->
                 <Button 
                     Content="Автомасштаб" 
                     Command="{Binding AutoScaleCommand}"
@@ -146,23 +142,14 @@
                     Command="{Binding ClearGraphCommand}"
                     Margin="0,0,8,0"
                     Padding="8,4"/>
-            </StackPanel>
-
-            <!-- Кнопки экспорта -->
-            <StackPanel 
-                Grid.Column="3" 
-                Orientation="Horizontal" 
-                HorizontalAlignment="Right"
-                Margin="8,0,0,0">
                 <Button 
-                    Content="Экспорт PNG" 
-                    Command="{Binding ExportGraphCommand}"
-                    CommandParameter="PNG"
+                    Content="Экспорт графика" 
+                    Command="{Binding ExportImageCommand}"
                     Margin="0,0,8,0"
                     Padding="8,4"/>
                 <Button 
-                    Content="Экспорт CSV" 
-                    Command="{Binding ExportDataCommand}"
+                    Content="Экспорт в Excel" 
+                    Command="{Binding ExportExcelCommand}"
                     Padding="8,4"/>
             </StackPanel>
         </Grid>

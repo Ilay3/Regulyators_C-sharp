@@ -17,7 +17,7 @@ namespace Regulyators.UI.Views
         {
             InitializeComponent();
 
-            // После загрузки контрола инициализируем график с задержкой
+            // После загрузки контрола инициализируем график
             Loaded += (s, e) =>
             {
                 if (DataContext is ImprovedChartViewModel viewModel)
