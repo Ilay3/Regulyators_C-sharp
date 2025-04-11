@@ -21,9 +21,31 @@ namespace Regulyators.UI.ViewModels
 {
     /// <summary>
     /// ViewModel для отображения графиков параметров двигателя с возможностью навигации и экспорта
+    /// Работает в режиме синглтона для непрерывного сбора данных в фоновом режиме
     /// </summary>
     public class ImprovedChartViewModel : ViewModelBase
     {
+        #region Singleton Implementation
+
+        private static ImprovedChartViewModel _instance;
+        private static readonly object _lock = new object();
+
+        /// <summary>
+        /// Получение экземпляра ViewModel (Singleton)
+        /// </summary>
+        public static ImprovedChartViewModel Instance
+        {
+            get
+            {
+                lock (_lock)
+                {
+                    return _instance ??= new ImprovedChartViewModel();
+                }
+            }
+        }
+
+        #endregion
+
         private readonly LoggingService _loggingService;
         private readonly ComPortService _comPortService;
         private readonly SettingsService _settingsService;
@@ -63,12 +85,18 @@ namespace Regulyators.UI.ViewModels
         private bool _showBoostPressure = false;
         private bool _showOilTemperature = true;
 
-        // ★ Изменение: добавляем поля для буферизации входящих данных и таймера
+        // Буфер для входящих данных и таймер
         private readonly object _bufferLock = new object();
         private readonly List<EngineParameters> _incomingDataBuffer = new List<EngineParameters>();
         private DispatcherTimer _uiUpdateTimer; // таймер для перерисовки графика
+        private DispatcherTimer _dataBackupTimer; // таймер для периодического сохранения данных
         private DateTime? _startTime = null;
+        private bool _dataCollectionStarted = false;
 
+        // Хранилище для периодического резервного копирования данных
+        private Dictionary<string, List<double>> _backupXData = new Dictionary<string, List<double>>();
+        private Dictionary<string, List<double>> _backupYData = new Dictionary<string, List<double>>();
+        private DateTime _lastBackupTime = DateTime.MinValue;
 
         private readonly Dictionary<string, ScottPlot.Plottable.ScatterPlot> _seriesPlots = new();
 
@@ -241,7 +269,7 @@ namespace Regulyators.UI.ViewModels
         #endregion
 
         /// <summary>
-        /// Конструктор
+        /// Приватный конструктор для реализации синглтона
         /// </summary>
         public ImprovedChartViewModel()
         {
@@ -249,6 +277,8 @@ namespace Regulyators.UI.ViewModels
             _comPortService = ComPortService.Instance;
             _settingsService = SettingsService.Instance;
             _simulationService = SimulationService.Instance;
+
+            _loggingService.LogInfo("ImprovedChartViewModel: Инициализация синглтона");
 
             // Инициализация коллекций для хранения данных
             foreach (var series in _seriesColors.Keys)
@@ -300,76 +330,152 @@ namespace Regulyators.UI.ViewModels
                     ? "Работа в режиме симуляции"
                     : "Ожидание подключения к оборудованию...");
 
-            _loggingService.LogInfo("График инициализирован и готов к получению данных");
+            // Инициализируем словари резервного копирования
+            foreach (var series in _seriesColors.Keys)
+            {
+                _backupXData[series] = new List<double>();
+                _backupYData[series] = new List<double>();
+            }
 
-            // ★ Изменение: инициализируем DispatcherTimer для периодического обновления графика
+            // Запуск сбора данных
+            StartDataCollection();
+        }
+
+        /// <summary>
+        /// Запуск сбора данных в фоновом режиме
+        /// </summary>
+        private void StartDataCollection()
+        {
+            // Проверяем, не запущен ли уже сбор данных
+            if (_dataCollectionStarted)
+                return;
+
+            _loggingService.LogInfo("ImprovedChartViewModel: Запуск сбора данных в фоновом режиме");
+
+            // Инициализируем DispatcherTimer для периодического обновления графика
             _uiUpdateTimer = new DispatcherTimer();
-            _uiUpdateTimer.Interval = TimeSpan.FromMilliseconds(500); // можно 200мс, 1000мс и т.д.
-            _uiUpdateTimer.Tick += (s, e) => OnUiUpdateTimerTick();
+            _uiUpdateTimer.Interval = TimeSpan.FromMilliseconds(500); // 500мс для обновления
+            _uiUpdateTimer.Tick += OnUiUpdateTimerTick;
             _uiUpdateTimer.Start();
+
+            // Инициализируем DispatcherTimer для периодического резервного копирования данных
+            _dataBackupTimer = new DispatcherTimer();
+            _dataBackupTimer.Interval = TimeSpan.FromMinutes(30); // Резервное копирование раз в 30 минут
+            _dataBackupTimer.Tick += OnDataBackupTimerTick;
+            _dataBackupTimer.Start();
+
+            _dataCollectionStarted = true;
         }
 
         /// <summary>
-        /// Обработчик события изменения статуса симуляции
+        /// Обработчик таймера резервного копирования данных
         /// </summary>
-        private void OnSimulationStatusChanged(object sender, bool isRunning)
+        private void OnDataBackupTimerTick(object sender, EventArgs e)
         {
             try
             {
-                Application.Current.Dispatcher.Invoke(() =>
+                BackupChartData();
+            }
+            catch (Exception ex)
+            {
+                _loggingService.LogError("ImprovedChartViewModel: Ошибка при резервном копировании данных", ex.Message);
+            }
+        }
+
+        /// <summary>
+        /// Создает резервную копию данных графика
+        /// </summary>
+        private void BackupChartData()
+        {
+            lock (_bufferLock)
+            {
+                _loggingService.LogInfo("ImprovedChartViewModel: Создание резервной копии данных графика");
+
+                // Очищаем предыдущие резервные копии
+                foreach (var series in _seriesColors.Keys)
                 {
-                    // Обновляем статус подключения, учитывая режим симуляции
-                    bool newConnectionStatus = _comPortService.IsConnected || isRunning;
-                    if (IsConnected != newConnectionStatus)
+                    _backupXData[series].Clear();
+                    _backupYData[series].Clear();
+
+                    // Копируем текущие данные
+                    if (_xData.ContainsKey(series) && _yData.ContainsKey(series))
                     {
-                        IsConnected = newConnectionStatus;
-                        StatusMessage = isRunning
-                            ? "Работа в режиме симуляции"
-                            : (IsConnected ? "Подключено к оборудованию" : "Ожидание подключения...");
-
-                        _loggingService.LogInfo($"Статус соединения обновлен: {IsConnected}, симуляция: {isRunning}");
+                        _backupXData[series].AddRange(_xData[series]);
+                        _backupYData[series].AddRange(_yData[series]);
                     }
-                });
-            }
-            catch (Exception ex)
-            {
-                _loggingService.LogError($"Ошибка обработки события изменения статуса симуляции: {ex.Message}", ex.StackTrace);
+                }
+
+                _lastBackupTime = DateTime.Now;
+                _loggingService.LogInfo($"ImprovedChartViewModel: Резервная копия создана, точек в истории: {(_xData.Count > 0 ? _xData.First().Value.Count : 0)}");
             }
         }
 
         /// <summary>
-        /// Обработчик события получения симулированных данных
+        /// Восстанавливает данные из резервной копии
         /// </summary>
-        private void OnSimulationParametersUpdated(object sender, EngineParameters parameters)
+        private void RestoreFromBackup()
         {
-            try
+            lock (_bufferLock)
             {
-                // Передаем симулированные данные в такой же обработчик, как и для реальных данных
-                OnDataReceived(sender, parameters);
+                if (_lastBackupTime == DateTime.MinValue)
+                {
+                    _loggingService.LogWarning("ImprovedChartViewModel: Нет доступных резервных копий для восстановления");
+                    return;
+                }
 
-                _loggingService.LogInfo($"Получены симулированные данные: Обороты={parameters.EngineSpeed:F0}, Масло={parameters.OilPressure:F2}");
-            }
-            catch (Exception ex)
-            {
-                _loggingService.LogError($"Ошибка обработки симулированных данных: {ex.Message}", ex.StackTrace);
+                _loggingService.LogInfo($"ImprovedChartViewModel: Восстановление данных из резервной копии от {_lastBackupTime}");
+
+                // Восстанавливаем данные из резервной копии
+                foreach (var series in _seriesColors.Keys)
+                {
+                    if (_backupXData.ContainsKey(series) && _backupYData.ContainsKey(series))
+                    {
+                        _xData[series].Clear();
+                        _yData[series].Clear();
+
+                        _xData[series].AddRange(_backupXData[series]);
+                        _yData[series].AddRange(_backupYData[series]);
+                    }
+                }
+
+                _loggingService.LogInfo($"ImprovedChartViewModel: Резервная копия создана, точек в истории: {(_xData.Count > 0 ? _xData.First().Value.Count : 0)}"
+);
             }
         }
 
         /// <summary>
-        /// Инициализация графика
+        /// Инициализация графика при отображении представления
         /// </summary>
         public void InitializeGraph(WpfPlot plot)
         {
             if (plot == null)
             {
-                _loggingService.LogError("Невозможно инициализировать график: plot = null");
+                _loggingService.LogError("ImprovedChartViewModel: Невозможно инициализировать график: plot = null");
                 return;
             }
 
-            _mainPlot = plot;
-            _isGraphInitialized = true;
+            _loggingService.LogInfo("ImprovedChartViewModel: Начало инициализации графика");
 
-            _loggingService.LogInfo("Начало инициализации графика");
+            // Проверяем, не инициализирован ли уже график
+            if (_isGraphInitialized && _mainPlot != null)
+            {
+                // Если инициализирован с другим объектом WpfPlot, корректно закрываем предыдущий
+                if (_mainPlot != plot)
+                {
+                    // Очищаем старые ссылки для GC
+                    _mainPlot = null;
+                    _isGraphInitialized = false;
+                    _seriesPlots.Clear();
+                }
+                else
+                {
+                    // Если тот же самый объект WpfPlot, просто обновляем график
+                    UpdateGraph();
+                    return;
+                }
+            }
+
+            _mainPlot = plot;
 
             try
             {
@@ -386,7 +492,7 @@ namespace Regulyators.UI.ViewModels
                 _mainPlot.Configuration.ScrollWheelZoom = true;
                 _mainPlot.Configuration.LockVerticalAxis = false;
 
-                // ★ Изменение: включаем очередь рендеринга (опционально)
+                // Включаем очередь рендеринга для лучшей производительности
                 _mainPlot.Configuration.UseRenderQueue = true;
 
                 // Настройка обработчиков для отключения автоскролла при ручном масштабировании/прокрутке
@@ -397,18 +503,17 @@ namespace Regulyators.UI.ViewModels
                 };
                 _mainPlot.MouseWheel += (sender, e) => AutoScroll = false;
 
-                // Создаем начальные пустые серии для графика
+                // Создаем начальные серии для графика
                 foreach (var series in _seriesColors.Keys)
                 {
                     Color color = _seriesColors[series];
                     var drawingColor = System.Drawing.Color.FromArgb(color.A, color.R, color.G, color.B);
 
                     var scatter = _mainPlot.Plot.AddScatter(
-                        new double[] { 0 }, 
+                        new double[] { 0 },
                         new double[] { 0 },
                         drawingColor,
                         label: series);
-
 
                     scatter.LineWidth = 2;
                     scatter.MarkerSize = 0;
@@ -425,32 +530,24 @@ namespace Regulyators.UI.ViewModels
                     _seriesPlots[series] = scatter;
                 }
 
-
                 // Настройка легенды
                 _mainPlot.Plot.Legend(location: Alignment.UpperRight);
 
                 // Устанавливаем начальные границы осей
                 _mainPlot.Plot.SetAxisLimits(0, 30, 0, 2000);
-                _mainPlot.Refresh();
 
-                _loggingService.LogInfo("График успешно инициализирован");
+                // Отмечаем график как инициализированный
+                _isGraphInitialized = true;
+
+                // Применяем накопленные данные при первой инициализации
+                UpdateGraph();
+
+                _loggingService.LogInfo("ImprovedChartViewModel: График успешно инициализирован");
                 StatusMessage = "График инициализирован и готов к работе";
-
-                // Проверяем статус соединения (включая симуляцию) после инициализации
-                bool newConnectionStatus = _comPortService.IsConnected || _simulationService.IsSimulationRunning;
-                if (IsConnected != newConnectionStatus)
-                {
-                    IsConnected = newConnectionStatus;
-                    StatusMessage = _simulationService.IsSimulationRunning
-                        ? "Работа в режиме симуляции"
-                        : (IsConnected ? "Подключено к оборудованию" : "Ожидание подключения...");
-
-                    _loggingService.LogInfo($"Статус соединения после инициализации графика: {IsConnected}");
-                }
             }
             catch (Exception ex)
             {
-                _loggingService.LogError("Ошибка при инициализации графика", ex.Message);
+                _loggingService.LogError("ImprovedChartViewModel: Ошибка при инициализации графика", ex.Message);
                 StatusMessage = "Ошибка при инициализации графика";
             }
         }
@@ -465,7 +562,7 @@ namespace Regulyators.UI.ViewModels
                 // Проверка на нулевые данные
                 if (parameters == null)
                 {
-                    _loggingService.LogWarning("Получены нулевые данные", "OnDataReceived");
+                    _loggingService.LogWarning("ImprovedChartViewModel: Получены нулевые данные", "OnDataReceived");
                     return;
                 }
 
@@ -488,13 +585,9 @@ namespace Regulyators.UI.ViewModels
                     EngineParameters.OilTemperature = parameters.OilTemperature;
                     EngineParameters.RackPosition = parameters.RackPosition;
                     EngineParameters.Timestamp = parameters.Timestamp;
-
-                    StatusMessage = $"Данные обновлены: {parameters.Timestamp:HH:mm:ss}, " +
-                                    $"Обороты: {parameters.EngineSpeed:F0}, " +
-                                    $"Масло: {parameters.OilPressure:F2}";
                 });
 
-                // ★ Изменение: вместо немедленного UpdateGraph() просто складываем данные в буфер
+                // Вместо немедленного UpdateGraph() просто складываем данные в буфер
                 lock (_bufferLock)
                 {
                     _incomingDataBuffer.Add(parameters);
@@ -502,14 +595,22 @@ namespace Regulyators.UI.ViewModels
             }
             catch (Exception ex)
             {
-                _loggingService.LogError("Ошибка обработки полученных данных", ex.Message);
+                _loggingService.LogError("ImprovedChartViewModel: Ошибка обработки полученных данных", ex.Message);
             }
         }
 
         /// <summary>
-        /// Метод таймера, который раз в N мс обновляет график
+        /// Метод таймера, который периодически обновляет график
         /// </summary>
-        private void OnUiUpdateTimerTick()
+        private void OnUiUpdateTimerTick(object sender, EventArgs e)
+        {
+            ProcessBufferedData();
+        }
+
+        /// <summary>
+        /// Обработка накопленных в буфере данных
+        /// </summary>
+        private void ProcessBufferedData()
         {
             // 1) Извлекаем накопленные данные из буфера
             List<EngineParameters> newData = null;
@@ -535,17 +636,74 @@ namespace Regulyators.UI.ViewModels
                     _startTime = p.Timestamp;
 
                 double x = (p.Timestamp - _startTime.Value).TotalSeconds;
+                _elapsedTime = x; // Обновляем текущее время для автосвкролла
 
                 AddDataPoint("Обороты двигателя", x, p.EngineSpeed);
                 AddDataPoint("Обороты турбокомпрессора", x, p.TurboCompressorSpeed);
                 AddDataPoint("Давление масла", x, p.OilPressure);
                 AddDataPoint("Давление наддува", x, p.BoostPressure);
                 AddDataPoint("Температура масла", x, p.OilTemperature);
-
             }
 
-            // 3) Обновляем график один раз
-            UpdateGraph();
+            // 3) Обновляем график только если он инициализирован
+            if (_isGraphInitialized && _mainPlot != null)
+            {
+                try
+                {
+                    Application.Current.Dispatcher.Invoke(() =>
+                    {
+                        UpdateGraph();
+                    }, DispatcherPriority.Background);
+                }
+                catch (Exception ex)
+                {
+                    _loggingService.LogError("ImprovedChartViewModel: Ошибка при обновлении графика в UI потоке", ex.Message);
+                }
+            }
+        }
+
+        /// <summary>
+        /// Обработчик события изменения статуса симуляции
+        /// </summary>
+        private void OnSimulationStatusChanged(object sender, bool isRunning)
+        {
+            try
+            {
+                Application.Current.Dispatcher.Invoke(() =>
+                {
+                    // Обновляем статус подключения, учитывая режим симуляции
+                    bool newConnectionStatus = _comPortService.IsConnected || isRunning;
+                    if (IsConnected != newConnectionStatus)
+                    {
+                        IsConnected = newConnectionStatus;
+                        StatusMessage = isRunning
+                            ? "Работа в режиме симуляции"
+                            : (IsConnected ? "Подключено к оборудованию" : "Ожидание подключения...");
+
+                        _loggingService.LogInfo($"ImprovedChartViewModel: Статус соединения обновлен: {IsConnected}, симуляция: {isRunning}");
+                    }
+                });
+            }
+            catch (Exception ex)
+            {
+                _loggingService.LogError($"ImprovedChartViewModel: Ошибка обработки события изменения статуса симуляции: {ex.Message}", ex.StackTrace);
+            }
+        }
+
+        /// <summary>
+        /// Обработчик события получения симулированных данных
+        /// </summary>
+        private void OnSimulationParametersUpdated(object sender, EngineParameters parameters)
+        {
+            try
+            {
+                // Передаем симулированные данные в такой же обработчик, как и для реальных данных
+                OnDataReceived(sender, parameters);
+            }
+            catch (Exception ex)
+            {
+                _loggingService.LogError($"ImprovedChartViewModel: Ошибка обработки симулированных данных: {ex.Message}", ex.StackTrace);
+            }
         }
 
         /// <summary>
@@ -564,7 +722,6 @@ namespace Regulyators.UI.ViewModels
                 _xData[series].RemoveAt(0);
                 _yData[series].RemoveAt(0);
             }
-
         }
 
         /// <summary>
@@ -593,13 +750,13 @@ namespace Regulyators.UI.ViewModels
                                 : "Отключено от оборудования";
                         }
 
-                        _loggingService.LogInfo($"Статус соединения изменен: {IsConnected}, реальное: {isConnected}, симуляция: {_simulationService.IsSimulationRunning}");
+                        _loggingService.LogInfo($"ImprovedChartViewModel: Статус соединения изменен: {IsConnected}, реальное: {isConnected}, симуляция: {_simulationService.IsSimulationRunning}");
                     }
                 });
             }
             catch (Exception ex)
             {
-                _loggingService.LogError($"Ошибка обработки изменения статуса подключения: {ex.Message}", ex.StackTrace);
+                _loggingService.LogError($"ImprovedChartViewModel: Ошибка обработки изменения статуса подключения: {ex.Message}", ex.StackTrace);
             }
         }
 
@@ -621,12 +778,15 @@ namespace Regulyators.UI.ViewModels
                         EngineParameters.OilTemperatureCriticalThreshold = _settingsService.ProtectionThresholds.OilTemperatureMaxThreshold;
 
                         // Добавляем на график линии порогов защит
-                        UpdateThresholdLines();
+                        if (_isGraphInitialized && _mainPlot != null)
+                        {
+                            UpdateThresholdLines();
+                        }
                     });
                 }
                 catch (Exception ex)
                 {
-                    _loggingService.LogError("Ошибка обработки изменения настроек", ex.Message);
+                    _loggingService.LogError("ImprovedChartViewModel: Ошибка обработки изменения настроек", ex.Message);
                 }
             }
         }
@@ -642,22 +802,16 @@ namespace Regulyators.UI.ViewModels
             try
             {
                 // Обновляем данные для каждой серии
-                var scatterPlots = _mainPlot.Plot.GetPlottables()
-                    .OfType<ScottPlot.Plottable.ScatterPlot>().ToList();
-
                 foreach (var series in _seriesColors.Keys)
                 {
                     if (!_seriesPlots.ContainsKey(series)) continue;
 
                     var scatter = _seriesPlots[series];
 
-
-
                     if (_xData[series].Count > 0 && _yData[series].Count > 0)
                     {
                         scatter.Update(_xData[series].ToArray(), _yData[series].ToArray());
                     }
-
 
                     scatter.IsVisible = series switch
                     {
@@ -669,7 +823,6 @@ namespace Regulyators.UI.ViewModels
                         _ => false
                     };
                 }
-
 
                 // Обновляем линии порогов защит
                 UpdateThresholdLines();
@@ -685,7 +838,7 @@ namespace Regulyators.UI.ViewModels
             }
             catch (Exception ex)
             {
-                _loggingService.LogError("Ошибка обновления графика", ex.Message);
+                _loggingService.LogError("ImprovedChartViewModel: Ошибка обновления графика", ex.Message);
             }
         }
 
@@ -749,7 +902,7 @@ namespace Regulyators.UI.ViewModels
             }
             catch (Exception ex)
             {
-                _loggingService.LogError("Ошибка обновления линий порогов", ex.Message);
+                _loggingService.LogError("ImprovedChartViewModel: Ошибка обновления линий порогов", ex.Message);
             }
         }
 
@@ -782,7 +935,7 @@ namespace Regulyators.UI.ViewModels
             }
             catch (Exception ex)
             {
-                _loggingService.LogError("Ошибка обновления временного окна", ex.Message);
+                _loggingService.LogError("ImprovedChartViewModel: Ошибка обновления временного окна", ex.Message);
             }
         }
 
@@ -793,7 +946,7 @@ namespace Regulyators.UI.ViewModels
         {
             try
             {
-                _loggingService.LogInfo("Начало очистки графика");
+                _loggingService.LogInfo("ImprovedChartViewModel: Начало очистки графика");
 
                 // Очищаем все коллекции точек
                 foreach (var series in _xData.Keys.ToList())
@@ -821,11 +974,11 @@ namespace Regulyators.UI.ViewModels
                 }
 
                 StatusMessage = "График очищен";
-                _loggingService.LogInfo("График успешно очищен");
+                _loggingService.LogInfo("ImprovedChartViewModel: График успешно очищен");
             }
             catch (Exception ex)
             {
-                _loggingService.LogError("Ошибка при очистке графика", ex.Message);
+                _loggingService.LogError("ImprovedChartViewModel: Ошибка при очистке графика", ex.Message);
                 StatusMessage = "Ошибка при очистке графика";
             }
         }
@@ -853,20 +1006,19 @@ namespace Regulyators.UI.ViewModels
                 if (dialog.ShowDialog() == true)
                 {
                     _mainPlot.Plot.SaveFig(dialog.FileName);
-                    _loggingService.LogInfo("График сохранен в файл", dialog.FileName);
+                    _loggingService.LogInfo("ImprovedChartViewModel: График сохранен в файл", dialog.FileName);
                     StatusMessage = "График сохранен как изображение";
                 }
             }
             catch (Exception ex)
             {
-                _loggingService.LogError("Ошибка при экспорте графика", ex.Message);
+                _loggingService.LogError("ImprovedChartViewModel: Ошибка при экспорте графика", ex.Message);
                 StatusMessage = "Ошибка при экспорте графика как изображения";
             }
         }
 
         /// <summary>
         /// Экспортирует текущий вид (изображение) графика в Excel-файл.
-        /// Использует библиотеку ClosedXML (бесплатная, MIT лицензия).
         /// </summary>
         private void ExportExcel()
         {
@@ -902,8 +1054,6 @@ namespace Regulyators.UI.ViewModels
                     using (var ms = new MemoryStream(fileBytes))
                     {
                         // 3) Добавляем картинку из Stream
-                        // Второй аргумент - «имя картинки» (любая строка)
-                        // NOTE: Никаких XLPictureFormat здесь не используем
                         var pic = worksheet.AddPicture(ms, "ChartImage")
                                            .MoveTo(worksheet.Cell(1, 1)) // вставка в A1
                                            .WithSize(800, 600);          // ширина/высота в пикселях
@@ -917,11 +1067,11 @@ namespace Regulyators.UI.ViewModels
                 }
 
                 StatusMessage = "График экспортирован в Excel как изображение";
-                _loggingService.LogInfo("График успешно встроен в Excel", dialog.FileName);
+                _loggingService.LogInfo("ImprovedChartViewModel: График успешно встроен в Excel", dialog.FileName);
             }
             catch (Exception ex)
             {
-                _loggingService.LogError("Ошибка при экспорте графика в Excel", ex.Message);
+                _loggingService.LogError("ImprovedChartViewModel: Ошибка при экспорте графика в Excel", ex.Message);
                 StatusMessage = "Ошибка при экспорте графика в Excel";
             }
         }
@@ -945,49 +1095,102 @@ namespace Regulyators.UI.ViewModels
             }
             catch (Exception ex)
             {
-                _loggingService.LogError("Ошибка масштабирования графика", ex.Message);
+                _loggingService.LogError("ImprovedChartViewModel: Ошибка масштабирования графика", ex.Message);
                 StatusMessage = "Ошибка масштабирования графика";
             }
         }
 
         /// <summary>
-        /// Очистка ресурсов
+        /// Метод, который можно вызвать при выгрузке View для очистки GUI-ресурсов
+        /// Сервис продолжит собирать данные в фоновом режиме
         /// </summary>
-        public void CleanUp()
+        public void ReleaseViewResources()
         {
             try
             {
-                // Отписываемся от событий
-                if (_comPortService != null)
-                {
-                    _comPortService.DataReceived -= OnDataReceived;
-                    _comPortService.ConnectionStatusChanged -= OnConnectionStatusChanged;
-                }
-
-                if (_settingsService != null)
-                {
-                    _settingsService.SettingsChanged -= OnSettingsChanged;
-                }
-
-                if (_simulationService != null)
-                {
-                    _simulationService.SimulationStatusChanged -= OnSimulationStatusChanged;
-                    _simulationService.ParametersUpdated -= OnSimulationParametersUpdated;
-                }
-
-                // Остановить и убрать таймер
-                _uiUpdateTimer?.Stop();
-                _uiUpdateTimer = null;
-
-                // Очистка ссылок на объекты графика
+                _loggingService.LogInfo("ImprovedChartViewModel: Освобождение только ресурсов представления (без удаления данных)");
+                // Только помечаем что график не инициализирован и удаляем ссылки на UI компоненты
+                _isGraphInitialized = false;
+                _seriesPlots.Clear();
                 _mainPlot = null;
-
-                _loggingService?.LogInfo("ImprovedChartViewModel: ресурсы освобождены");
+                // НЕ очищаем данные (_xData, _yData), чтобы сохранить историю
             }
             catch (Exception ex)
             {
-                _loggingService?.LogError("Ошибка при очистке ресурсов ImprovedChartViewModel", ex.Message);
+                _loggingService.LogError("ImprovedChartViewModel: Ошибка при освобождении ресурсов представления", ex.Message);
             }
+        }
+
+        /// <summary>
+        /// Освобождение ресурсов и остановка работы (вызывается при закрытии приложения)
+        /// </summary>
+        public void ShutDown()
+        {
+            try
+            {
+                _loggingService.LogInfo("ImprovedChartViewModel: Остановка фонового сервиса");
+
+                // Создаем последнюю резервную копию перед выключением
+                BackupChartData();
+
+                // Отписываемся от всех событий
+                _comPortService.DataReceived -= OnDataReceived;
+                _comPortService.ConnectionStatusChanged -= OnConnectionStatusChanged;
+                _settingsService.SettingsChanged -= OnSettingsChanged;
+                _simulationService.SimulationStatusChanged -= OnSimulationStatusChanged;
+                _simulationService.ParametersUpdated -= OnSimulationParametersUpdated;
+
+                // Останавливаем таймеры
+                _uiUpdateTimer?.Stop();
+                _uiUpdateTimer = null;
+
+                _dataBackupTimer?.Stop();
+                _dataBackupTimer = null;
+
+                // Очищаем данные
+                foreach (var series in _xData.Keys.ToList())
+                {
+                    _xData[series].Clear();
+                    _yData[series].Clear();
+                }
+
+                foreach (var series in _backupXData.Keys.ToList())
+                {
+                    _backupXData[series].Clear();
+                    _backupYData[series].Clear();
+                }
+
+                // Очищаем буфер
+                lock (_bufferLock)
+                {
+                    _incomingDataBuffer.Clear();
+                }
+
+                // Очищаем ссылки
+                _seriesPlots.Clear();
+                _mainPlot = null;
+                _isGraphInitialized = false;
+                _dataCollectionStarted = false;
+
+                // Очищаем синглтон для GC
+                _instance = null;
+            }
+            catch (Exception ex)
+            {
+                _loggingService.LogError("ImprovedChartViewModel: Ошибка при остановке фонового сервиса", ex.Message);
+            }
+        }
+
+        /// <summary>
+        /// Освобождение ресурсов при выгрузке
+        /// </summary>
+        protected override void ReleaseMangedResources()
+        {
+            base.ReleaseMangedResources();
+
+            // НЕ вызываем ShutDown() здесь, чтобы сервис продолжал работать
+            // Просто освобождаем ресурсы UI для предотвращения утечек
+            ReleaseViewResources();
         }
     }
 }

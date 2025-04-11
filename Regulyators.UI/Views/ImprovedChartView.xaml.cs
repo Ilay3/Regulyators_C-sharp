@@ -11,52 +11,50 @@ namespace Regulyators.UI.Views
     /// </summary>
     public partial class ImprovedChartView : UserControl
     {
-        private ImprovedChartViewModel _viewModel;
-
         public ImprovedChartView()
         {
             InitializeComponent();
 
-            // После загрузки контрола инициализируем график
-            Loaded += (s, e) =>
-            {
-                if (DataContext is ImprovedChartViewModel viewModel)
-                {
-                    _viewModel = viewModel;
-                    // Используем Dispatcher.BeginInvoke для отложенной инициализации
-                    Dispatcher.BeginInvoke(new Action(() =>
-                    {
-                        _viewModel.InitializeGraph(MainPlot);
-                    }), DispatcherPriority.Loaded);
-                }
-                else
-                {
-                    // Если DataContext не установлен, создаем новый ViewModel
-                    _viewModel = new ImprovedChartViewModel();
-                    DataContext = _viewModel;
-                    // Используем Dispatcher.BeginInvoke для отложенной инициализации
-                    Dispatcher.BeginInvoke(new Action(() =>
-                    {
-                        _viewModel.InitializeGraph(MainPlot);
-                    }), DispatcherPriority.Loaded);
-                }
-            };
+            // Используем синглтон вместо создания нового экземпляра
+            DataContext = ImprovedChartViewModel.Instance;
 
-            // Обработчик выгрузки контрола для освобождения ресурсов
-            Unloaded += (s, e) =>
+            // После загрузки контрола инициализируем график
+            Loaded += OnViewLoaded;
+
+            // Обработчик выгрузки контрола для освобождения ресурсов UI (но не данных)
+            Unloaded += OnViewUnloaded;
+        }
+
+        private void OnViewLoaded(object sender, RoutedEventArgs e)
+        {
+            try
             {
-                try
+                // Используем синглтон напрямую
+                var viewModel = ImprovedChartViewModel.Instance;
+
+                // Используем Dispatcher.BeginInvoke для отложенной инициализации
+                Dispatcher.BeginInvoke(new Action(() =>
                 {
-                    // Вызываем метод очистки ресурсов у ViewModel
-                    _viewModel?.CleanUp();
-                    _viewModel = null;
-                }
-                catch (Exception ex)
-                {
-                    // Проглатываем любые исключения при закрытии
-                    System.Diagnostics.Debug.WriteLine($"Ошибка при выгрузке ImprovedChartView: {ex.Message}");
-                }
-            };
+                    viewModel.InitializeGraph(MainPlot);
+                }), DispatcherPriority.Loaded);
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"Ошибка при загрузке ImprovedChartView: {ex.Message}");
+            }
+        }
+
+        private void OnViewUnloaded(object sender, RoutedEventArgs e)
+        {
+            try
+            {
+                // Освобождаем только ресурсы UI, данные продолжают собираться в фоновом режиме
+                ImprovedChartViewModel.Instance.ReleaseViewResources();
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"Ошибка при выгрузке ImprovedChartView: {ex.Message}");
+            }
         }
     }
 }
