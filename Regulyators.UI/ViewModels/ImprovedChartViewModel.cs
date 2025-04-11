@@ -274,11 +274,65 @@ namespace Regulyators.UI.ViewModels
             // Подписка на события изменения настроек
             _settingsService.SettingsChanged += OnSettingsChanged;
 
-            // Проверка соединения
-            _isConnected = _comPortService.IsConnected;
-            StatusMessage = _isConnected ? "Подключено к оборудованию" : "Ожидание подключения к оборудованию...";
+            // Подписка на событие изменения статуса симуляции
+            _simulationService.SimulationStatusChanged += OnSimulationStatusChanged;
+            _simulationService.ParametersUpdated += OnSimulationParametersUpdated;
+
+            // Проверка соединения (учитываем и обычное соединение, и режим симуляции)
+            _isConnected = _comPortService.IsConnected || _simulationService.IsSimulationRunning;
+            StatusMessage = _isConnected
+                ? "Подключено к оборудованию"
+                : (_simulationService.IsSimulationRunning
+                    ? "Работа в режиме симуляции"
+                    : "Ожидание подключения к оборудованию...");
 
             _loggingService.LogInfo("График инициализирован и готов к получению данных");
+        }
+
+        /// <summary>
+        /// Обработчик события изменения статуса симуляции
+        /// </summary>
+        private void OnSimulationStatusChanged(object sender, bool isRunning)
+        {
+            try
+            {
+                Application.Current.Dispatcher.Invoke(() =>
+                {
+                    // Обновляем статус подключения, учитывая режим симуляции
+                    bool newConnectionStatus = _comPortService.IsConnected || isRunning;
+                    if (IsConnected != newConnectionStatus)
+                    {
+                        IsConnected = newConnectionStatus;
+                        StatusMessage = isRunning
+                            ? "Работа в режиме симуляции"
+                            : (IsConnected ? "Подключено к оборудованию" : "Ожидание подключения...");
+
+                        _loggingService.LogInfo($"Статус соединения обновлен: {IsConnected}, симуляция: {isRunning}");
+                    }
+                });
+            }
+            catch (Exception ex)
+            {
+                _loggingService.LogError($"Ошибка обработки события изменения статуса симуляции: {ex.Message}", ex.StackTrace);
+            }
+        }
+
+        /// <summary>
+        /// Обработчик события получения симулированных данных
+        /// </summary>
+        private void OnSimulationParametersUpdated(object sender, EngineParameters parameters)
+        {
+            try
+            {
+                // Передаем симулированные данные в такой же обработчик, как и для реальных данных
+                OnDataReceived(sender, parameters);
+
+                _loggingService.LogInfo($"Получены симулированные данные: Обороты={parameters.EngineSpeed:F0}, Масло={parameters.OilPressure:F2}");
+            }
+            catch (Exception ex)
+            {
+                _loggingService.LogError($"Ошибка обработки симулированных данных: {ex.Message}", ex.StackTrace);
+            }
         }
 
         /// <summary>
@@ -369,6 +423,18 @@ namespace Regulyators.UI.ViewModels
 
                 _loggingService.LogInfo("График успешно инициализирован");
                 StatusMessage = "График инициализирован и готов к работе";
+
+                // Проверяем статус соединения (включая симуляцию) после инициализации
+                bool newConnectionStatus = _comPortService.IsConnected || _simulationService.IsSimulationRunning;
+                if (IsConnected != newConnectionStatus)
+                {
+                    IsConnected = newConnectionStatus;
+                    StatusMessage = _simulationService.IsSimulationRunning
+                        ? "Работа в режиме симуляции"
+                        : (IsConnected ? "Подключено к оборудованию" : "Ожидание подключения...");
+
+                    _loggingService.LogInfo($"Статус соединения после инициализации графика: {IsConnected}");
+                }
             }
             catch (Exception ex)
             {
@@ -393,6 +459,15 @@ namespace Regulyators.UI.ViewModels
 
                 Application.Current.Dispatcher.Invoke(() =>
                 {
+                    // Устанавливаем статус подключения, если ещё не установлен
+                    if (!IsConnected)
+                    {
+                        IsConnected = true;
+                        StatusMessage = _simulationService.IsSimulationRunning
+                            ? "Работа в режиме симуляции"
+                            : "Подключено к оборудованию";
+                    }
+
                     // Обновляем параметры двигателя
                     EngineParameters.EngineSpeed = parameters.EngineSpeed;
                     EngineParameters.TurboCompressorSpeed = parameters.TurboCompressorSpeed;
@@ -449,8 +524,35 @@ namespace Regulyators.UI.ViewModels
         /// </summary>
         private void OnConnectionStatusChanged(object sender, bool isConnected)
         {
-            IsConnected = isConnected;
-            StatusMessage = isConnected ? "Подключено к оборудованию" : "Отключено от оборудования";
+            try
+            {
+                Application.Current.Dispatcher.Invoke(() =>
+                {
+                    // Обновляем статус подключения, учитывая режим симуляции
+                    bool newConnectionStatus = isConnected || _simulationService.IsSimulationRunning;
+                    if (IsConnected != newConnectionStatus)
+                    {
+                        IsConnected = newConnectionStatus;
+
+                        if (_simulationService.IsSimulationRunning)
+                        {
+                            StatusMessage = "Работа в режиме симуляции";
+                        }
+                        else
+                        {
+                            StatusMessage = isConnected
+                                ? "Подключено к оборудованию"
+                                : "Отключено от оборудования";
+                        }
+
+                        _loggingService.LogInfo($"Статус соединения изменен: {IsConnected}, реальное: {isConnected}, симуляция: {_simulationService.IsSimulationRunning}");
+                    }
+                });
+            }
+            catch (Exception ex)
+            {
+                _loggingService.LogError($"Ошибка обработки изменения статуса подключения: {ex.Message}", ex.StackTrace);
+            }
         }
 
         /// <summary>
@@ -803,7 +905,7 @@ namespace Regulyators.UI.ViewModels
                                 else
                                 {
                                     // Если нет данных, записываем пустую ячейку
-                                    values.Add("");
+                                    values.Add(""); 
                                 }
                             }
 
@@ -865,6 +967,12 @@ namespace Regulyators.UI.ViewModels
                 if (_settingsService != null)
                 {
                     _settingsService.SettingsChanged -= OnSettingsChanged;
+                }
+
+                if (_simulationService != null)
+                {
+                    _simulationService.SimulationStatusChanged -= OnSimulationStatusChanged;
+                    _simulationService.ParametersUpdated -= OnSimulationParametersUpdated;
                 }
 
                 // Очистка ссылок на объекты графика
