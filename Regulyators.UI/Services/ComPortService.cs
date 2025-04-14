@@ -61,6 +61,9 @@ namespace Regulyators.UI.Services
         /// </summary>
         public ComPortSettings Settings { get; private set; }
 
+        // Таймер для проверки состояния соединения
+        private readonly Timer _connectionWatchdog;
+
         /// <summary>
         /// Статус соединения
         /// </summary>
@@ -100,8 +103,29 @@ namespace Regulyators.UI.Services
             Settings = new ComPortSettings();
             _isConnected = false;
 
+            _connectionWatchdog = new Timer(ConnectionWatchdogCallback, null, Timeout.Infinite, Timeout.Infinite);
+
             // Инициализация таймера-сторожа для симуляции
             _simulationWatchdog = new Timer(SimulationWatchdogCallback, null, Timeout.Infinite, Timeout.Infinite);
+        }
+
+        /// <summary>
+        /// Callback таймера проверки соединения
+        /// </summary>
+        private void ConnectionWatchdogCallback(object state)
+        {
+            if (IsConnected && !_isSimulationMode && _serialPort != null)
+            {
+                if (!_serialPort.IsOpen)
+                {
+                    // Порт закрылся по внешним причинам
+                    _loggingService.LogWarning("Обнаружено неожиданное закрытие порта");
+                    IsConnected = false;
+
+                    // Попытка восстановления связи
+                    _ = TryReconnectAsync();
+                }
+            }
         }
 
         /// <summary>
@@ -267,6 +291,22 @@ namespace Regulyators.UI.Services
                     WriteTimeout = Settings.WriteTimeout
                 };
 
+                // Проверка и принудительная установка настроек по протоколу
+                if (Settings.BaudRate != 9600 || Settings.Parity != Parity.Odd ||
+                    Settings.StopBits != StopBits.Two || Settings.DataBits != 8)
+                {
+                    _loggingService.LogWarning("Корректировка настроек COM-порта в соответствии с протоколом");
+                    Settings.BaudRate = 9600;
+                    Settings.Parity = Parity.Odd;
+                    Settings.StopBits = StopBits.Two;
+                    Settings.DataBits = 8;
+
+                    _serialPort.BaudRate = Settings.BaudRate;
+                    _serialPort.Parity = Settings.Parity;
+                    _serialPort.StopBits = Settings.StopBits;
+                    _serialPort.DataBits = Settings.DataBits;
+                }
+
                 _serialPort.Open();
 
                 // Очищаем буферы порта
@@ -281,6 +321,9 @@ namespace Regulyators.UI.Services
 
                 // Запускаем мониторинг порта
                 StartMonitoring();
+
+                // Запускаем таймер проверки соединения
+                _connectionWatchdog.Change(5000, 5000); // Проверка каждые 5 секунд
 
                 _loggingService.LogInfo("Подключение к COM-порту успешно", $"Порт: {Settings.PortName}");
                 return true;
@@ -352,6 +395,7 @@ namespace Regulyators.UI.Services
                 }
 
                 IsConnected = false;
+                _connectionWatchdog.Change(Timeout.Infinite, Timeout.Infinite);
 
                 // Очищаем очередь команд и задач завершения
                 lock (_lockObj)
@@ -958,100 +1002,82 @@ namespace Regulyators.UI.Services
                 _loggingService.LogInfo("Ожидание ответа на команду", $"Тип: {command.CommandType}, Задержка: {Settings.ResponseDelay} мс");
 
                 // Константы протокола
-                const byte SYNC_START = 255; // Признак начала пакета (0xFF)
-                const byte SYNC_2 = 254;     // Байт для byte-stuffing (0xFE)
+                const byte SYNC_START = ERCHM30TZProtocol.SYNC_START; // 255
+                const byte SYNC_2 = ERCHM30TZProtocol.SYNC_2;         // 254
 
                 // Ждем начала ответа
                 await Task.Delay(Settings.ResponseDelay);
 
-                // Читаем байты ответа
-                List<byte> responseBuffer = new List<byte>();
+                // Создаем буфер фиксированного размера (оптимизация памяти)
+                byte[] buffer = new byte[256]; // Максимальный размер пакета ЭРЧМ30ТЗ
+                int bufferPos = 0;
                 bool packetStartFound = false;
-                byte lastByte = 0;
                 int timeoutCounter = 0;
+                int bytesRead = 0;
 
                 // Ожидаем данные с таймаутом
-                while (timeoutCounter < 50) // Максимум 5 секунд при задержке 100 мс
+                while (timeoutCounter < 30) // Максимум 3 секунды при задержке 100 мс
                 {
                     if (_serialPort?.BytesToRead > 0)
                     {
-                        byte[] buffer = new byte[_serialPort.BytesToRead];
-                        int bytesRead = _serialPort.Read(buffer, 0, buffer.Length);
+                        bytesRead = _serialPort.Read(buffer, bufferPos, Math.Min(buffer.Length - bufferPos, _serialPort.BytesToRead));
 
+                        // Поиск начала пакета и корректная обработка byte-stuffing
                         for (int i = 0; i < bytesRead; i++)
                         {
-                            byte currentByte = buffer[i];
-
                             if (!packetStartFound)
                             {
                                 // Ищем начало пакета (SYNC_START)
-                                if (currentByte == SYNC_START)
+                                if (buffer[i] == SYNC_START)
                                 {
                                     packetStartFound = true;
-                                    responseBuffer.Add(currentByte);
+                                    buffer[0] = SYNC_START;
+                                    bufferPos = 1;
                                 }
                             }
                             else
                             {
-                                // Обработка byte-stuffing: если предыдущий байт был SYNC_START и текущий SYNC_2,
-                                // то это не новый пакет, а экранированный SYNC_START в данных
-                                if (lastByte == SYNC_START && currentByte == SYNC_2)
+                                // Обработка последовательного SYNC_START + SYNC_2 (byte-stuffing)
+                                if (i > 0 && buffer[i] == SYNC_2 && buffer[i - 1] == SYNC_START)
                                 {
-                                    // Уже добавили SYNC_START, игнорируем SYNC_2
-                                    lastByte = currentByte;
+                                    // Это был экранированный SYNC_START, убираем SYNC_2
                                     continue;
                                 }
 
-                                // Если получен SYNC_START не после SYNC_2, то это начало нового пакета
-                                if (currentByte == SYNC_START && lastByte != SYNC_2)
+                                buffer[bufferPos++] = buffer[i];
+
+                                // Если достаточно данных для определения длины пакета
+                                if (bufferPos >= 2)
                                 {
-                                    // Очищаем буфер и начинаем новый пакет
-                                    responseBuffer.Clear();
-                                    responseBuffer.Add(currentByte);
+                                    byte lDat = buffer[1]; // Длина пакета
+
+                                    // Проверяем наличие полного пакета: SYNC_START + L_DAT + ... + CS
+                                    if (bufferPos >= lDat + 2)
+                                    {
+                                        // Проверка контрольной суммы
+                                        byte calculatedChecksum = ERCHM30TZProtocol.CalculateChecksum(buffer, 1, bufferPos - 2);
+                                        byte receivedChecksum = buffer[bufferPos - 1];
+
+                                        if (calculatedChecksum == receivedChecksum)
+                                        {
+                                            // Извлекаем данные (без SYNC_START, L_DAT, COM и CS)
+                                            byte[] data = new byte[lDat - 2];
+                                            Array.Copy(buffer, 3, data, 0, lDat - 2);
+                                            return ProcessResponse(command, data);
+                                        }
+                                        else
+                                        {
+                                            _loggingService.LogWarning(
+                                                $"Ошибка контрольной суммы: получено 0x{receivedChecksum:X2}, вычислено 0x{calculatedChecksum:X2}");
+                                            return false;
+                                        }
+                                    }
                                 }
-                                else
+
+                                // Проверка на переполнение буфера
+                                if (bufferPos >= buffer.Length)
                                 {
-                                    // Обычный байт данных
-                                    responseBuffer.Add(currentByte);
-                                }
-                            }
-
-                            lastByte = currentByte;
-                        }
-
-                        // Проверяем, есть ли у нас полный пакет
-                        if (responseBuffer.Count >= 3) // Минимум SYNC_START, L_DAT, COM
-                        {
-                            byte lDat = responseBuffer[1]; // Длина пакета
-
-                            // Проверяем, получили ли мы весь пакет
-                            // Полный пакет = SYNC_START + L_DAT + COM + данные + CS
-                            if (responseBuffer.Count >= lDat + 2) // +2 для SYNC_START и L_DAT
-                            {
-                                // Проверка контрольной суммы
-                                int sum = 0;
-                                for (int i = 1; i < responseBuffer.Count - 1; i++)
-                                {
-                                    sum += responseBuffer[i];
-                                }
-                                byte calculatedChecksum = (byte)(256 - (sum % 256));
-                                byte receivedChecksum = responseBuffer[responseBuffer.Count - 1];
-
-                                if (calculatedChecksum == receivedChecksum)
-                                {
-                                    // Получаем команду из пакета
-                                    byte comByte = responseBuffer[2];
-
-                                    // Извлекаем данные (без SYNC_START, L_DAT, COM и CS)
-                                    byte[] data = responseBuffer.Skip(3).Take(lDat - 2).ToArray();
-
-                                    // Обрабатываем данные
-                                    return ProcessResponse(command, data);
-                                }
-                                else
-                                {
-                                    _loggingService.LogWarning(
-                                        $"Ошибка контрольной суммы: получено 0x{receivedChecksum:X2}, вычислено 0x{calculatedChecksum:X2}");
+                                    _loggingService.LogWarning("Переполнение буфера при чтении ответа");
                                     return false;
                                 }
                             }

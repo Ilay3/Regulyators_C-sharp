@@ -108,5 +108,19 @@ namespace Regulyators.UI.Models
             }
             return (byte)(256 - (sum % 256));
         }
+
+        /// <summary>
+        /// Рассчитывает контрольную сумму для указанного диапазона байтов в пакете.
+        /// </summary>
+        public static byte CalculateChecksum(byte[] packet, int startIndex, int count)
+        {
+            int sum = 0;
+            for (int i = startIndex; i < startIndex + count; i++)
+            {
+                sum += packet[i];
+            }
+            return (byte)(256 - (sum % 256));
+        }
+
     }
 }

@@ -58,7 +58,7 @@
 
                             <WrapPanel>
                                 <RadioButton 
-                                    Content="ОСТАНОВ" 
+                                    Content="ОСТАНОВКА" 
                                     IsChecked="{Binding IsEngineStop}"
                                     Command="{Binding SetEngineModeCommand}"
                                     CommandParameter="Stop"
@@ -445,7 +445,7 @@
 
                         <Button 
                             Grid.Column="1"
-                            Content="ОСТАНОВ" 
+                            Content="ОСТАНОВКА" 
                             Command="{Binding StopEngineCommand}"
                             Style="{StaticResource MaterialDesignRaisedButton}"
                             materialDesign:ButtonAssist.CornerRadius="2"
