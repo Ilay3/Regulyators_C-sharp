@@ -11,15 +11,15 @@
     <Application.Resources>
         <ResourceDictionary>
             <ResourceDictionary.MergedDictionaries>
-                <!-- Material Design Themes -->
-                <materialDesign:BundledTheme BaseTheme="Light" PrimaryColor="Blue" SecondaryColor="LightBlue" />
+                <!-- Material Design Themes with a professional blue theme -->
+                <materialDesign:BundledTheme BaseTheme="Light" PrimaryColor="DeepPurple" SecondaryColor="Teal" />
                 <ResourceDictionary Source="pack://application:,,,/MaterialDesignThemes.Wpf;component/Themes/MaterialDesignTheme.Defaults.xaml" />
 
-                <!-- Ссылка на стили GaugeControl -->
+                <!-- GaugeControl styles -->
                 <ResourceDictionary Source="/Resources/GaugeStyles.xaml"/>
             </ResourceDictionary.MergedDictionaries>
 
-            <!-- Конвертеры -->
+            <!-- Converters -->
             <converters:BoolToStringConverter x:Key="BoolToStringConverter"/>
             <converters:BoolToBrushConverter x:Key="BoolToBrushConverter"/>
             <converters:ValueToStringWithUnitConverter x:Key="ValueToStringWithUnitConverter"/>
@@ -27,7 +27,7 @@
             <converters:EnumToStringConverter x:Key="EnumToStringConverter"/>
             <converters:BooleanToBrushConverterExt x:Key="BooleanToBrushExt"/>
 
-            <!-- Шаблоны для отображения ViewModels -->
+            <!-- ViewModel Templates -->
             <DataTemplate DataType="{x:Type viewmodels:EngineParametersViewModel}">
                 <views:EngineParametersView />
             </DataTemplate>
@@ -44,7 +44,6 @@
                 <views:ImprovedChartView />
             </DataTemplate>
 
-            <!-- Шаблоны для защит и настроек -->
             <DataTemplate DataType="{x:Type viewmodels:ProtectionSystemViewModel}">
                 <views:ProtectionSystemView />
             </DataTemplate>
@@ -53,31 +52,32 @@
                 <views:SettingsView />
             </DataTemplate>
 
-            <!-- Шаблон для аналоговых индикаторов -->
             <DataTemplate DataType="{x:Type viewmodels:GaugePanelViewModel}">
                 <views:GaugePanelView />
             </DataTemplate>
 
-            <!-- Шаблон для страницы симуляции -->
             <DataTemplate DataType="{x:Type viewmodels:SimulationViewModel}">
                 <views:SimulationView />
             </DataTemplate>
 
-            <!-- Материальные стили для элементов управления -->
+            <!-- Material Design Styles -->
             <Style x:Key="HeaderTextBlockStyle" TargetType="TextBlock" 
                    BasedOn="{StaticResource MaterialDesignHeadline5TextBlock}">
                 <Setter Property="Margin" Value="0,0,0,16"/>
+                <Setter Property="Foreground" Value="{DynamicResource PrimaryHueDarkBrush}"/>
             </Style>
 
             <Style x:Key="SubHeaderTextBlockStyle" TargetType="TextBlock" 
                    BasedOn="{StaticResource MaterialDesignHeadline6TextBlock}">
                 <Setter Property="Margin" Value="0,0,0,8"/>
+                <Setter Property="Foreground" Value="{DynamicResource PrimaryHueMidBrush}"/>
             </Style>
 
             <Style x:Key="PrimaryButtonStyle" TargetType="Button" 
                    BasedOn="{StaticResource MaterialDesignRaisedButton}">
                 <Setter Property="Padding" Value="16,8"/>
                 <Setter Property="materialDesign:ButtonAssist.CornerRadius" Value="4"/>
+                <Setter Property="Foreground" Value="White"/>
             </Style>
 
             <Style x:Key="DangerButtonStyle" TargetType="Button" 
@@ -86,6 +86,55 @@
                 <Setter Property="materialDesign:ButtonAssist.CornerRadius" Value="4"/>
                 <Setter Property="Background" Value="#F44336"/>
                 <Setter Property="BorderBrush" Value="#F44336"/>
+                <Setter Property="Foreground" Value="White"/>
+            </Style>
+
+            <Style x:Key="SuccessButtonStyle" TargetType="Button" 
+                   BasedOn="{StaticResource MaterialDesignRaisedButton}">
+                <Setter Property="Padding" Value="16,8"/>
+                <Setter Property="materialDesign:ButtonAssist.CornerRadius" Value="4"/>
+                <Setter Property="Background" Value="#4CAF50"/>
+                <Setter Property="BorderBrush" Value="#4CAF50"/>
+                <Setter Property="Foreground" Value="White"/>
+            </Style>
+
+            <Style x:Key="WarningButtonStyle" TargetType="Button" 
+                   BasedOn="{StaticResource MaterialDesignRaisedButton}">
+                <Setter Property="Padding" Value="16,8"/>
+                <Setter Property="materialDesign:ButtonAssist.CornerRadius" Value="4"/>
+                <Setter Property="Background" Value="#FF9800"/>
+                <Setter Property="BorderBrush" Value="#FF9800"/>
+                <Setter Property="Foreground" Value="White"/>
+            </Style>
+
+            <Style x:Key="CardStyle" TargetType="materialDesign:Card">
+                <Setter Property="Margin" Value="8"/>
+                <Setter Property="Padding" Value="16"/>
+                <Setter Property="materialDesign:ElevationAssist.Elevation" Value="Dp2"/>
+                <Setter Property="Background" Value="{DynamicResource MaterialDesignPaper}"/>
+                <Setter Property="UniformCornerRadius" Value="8"/>
+            </Style>
+
+            <Style x:Key="GridHeaderStyle" TargetType="DataGrid">
+                <Setter Property="AutoGenerateColumns" Value="False"/>
+                <Setter Property="CanUserAddRows" Value="False"/>
+                <Setter Property="CanUserDeleteRows" Value="False"/>
+                <Setter Property="GridLinesVisibility" Value="Horizontal"/>
+                <Setter Property="IsReadOnly" Value="True"/>
+                <Setter Property="Background" Value="White"/>
+                <Setter Property="AlternatingRowBackground" Value="#F5F8FF"/>
+                <Setter Property="RowBackground" Value="White"/>
+                <Setter Property="HorizontalGridLinesBrush" Value="#E0E0E0"/>
+                <Setter Property="BorderBrush" Value="#E0E0E0"/>
+                <Setter Property="HeadersVisibility" Value="Column"/>
+            </Style>
+
+            <Style x:Key="DataGridColumnHeaderStyle" TargetType="DataGridColumnHeader" 
+                   BasedOn="{StaticResource MaterialDesignDataGridColumnHeader}">
+                <Setter Property="Background" Value="{DynamicResource PrimaryHueLightBrush}"/>
+                <Setter Property="Foreground" Value="{DynamicResource PrimaryHueDarkForegroundBrush}"/>
+                <Setter Property="Padding" Value="8"/>
+                <Setter Property="FontWeight" Value="SemiBold"/>
             </Style>
         </ResourceDictionary>
     </Application.Resources>

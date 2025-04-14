@@ -14,5 +14,11 @@
         /// Представление, связанное с пунктом меню
         /// </summary>
         public object ViewModel { get; set; }
+
+        /// <summary>
+        /// Идентификатор иконки из MaterialDesign
+        /// </summary>
+        public string IconKind { get; set; } = "ViewDashboard";
+
     }
 }

@@ -5,255 +5,296 @@
     xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006" 
     xmlns:d="http://schemas.microsoft.com/expression/blend/2008" 
     xmlns:local="clr-namespace:Regulyators.UI.Views"
+    xmlns:materialDesign="http://materialdesigninxaml.net/winfx/xaml/themes"
     xmlns:converters="clr-namespace:Regulyators.UI.Converters"
     mc:Ignorable="d" 
-    d:DesignHeight="600" d:DesignWidth="800">
+    d:DesignHeight="850" d:DesignWidth="1360"
+    Background="{DynamicResource MaterialDesignPaper}">
 
     <UserControl.Resources>
         <converters:EnumToStringConverter x:Key="EnumToStringConverter"/>
     </UserControl.Resources>
 
-    <Grid Margin="16">
+    <Grid Margin="12">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto"/>
             <RowDefinition Height="*"/>
             <RowDefinition Height="Auto"/>
         </Grid.RowDefinitions>
 
-        <!-- Заголовок -->
-        <TextBlock 
-            Grid.Row="0"
-            Text="Настройки системы" 
-            FontSize="18" 
-            FontWeight="Bold" 
-            Margin="0,0,0,16"/>
+        <!-- Header -->
+        <StackPanel Grid.Row="0" Margin="0,0,0,8">
+            <TextBlock 
+                Text="НАСТРОЙКИ СИСТЕМЫ" 
+                Style="{StaticResource MaterialDesignHeadline6TextBlock}"
+                Foreground="{DynamicResource PrimaryHueMidBrush}"
+                Margin="0,0,0,2"/>
+            <TextBlock 
+                Text="Управление конфигурацией и параметрами работы системы"
+                Style="{StaticResource MaterialDesignBody2TextBlock}"
+                Opacity="0.6"/>
+        </StackPanel>
 
-        <!-- Основное содержимое -->
+        <!-- Main Content -->
         <Grid Grid.Row="1">
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="*" />
                 <ColumnDefinition Width="*" />
             </Grid.ColumnDefinitions>
 
-            <!-- Левая панель - настройки связи -->
-            <Border 
+            <!-- Left Panel - Connection Settings -->
+            <materialDesign:Card 
                 Grid.Column="0" 
-                BorderBrush="#CCCCCC" 
-                BorderThickness="1" 
-                Margin="0,0,8,0"
-                Padding="16"
-                Background="#F5F5F5"
-                CornerRadius="4">
-                <StackPanel>
+                Margin="0,0,6,0"
+                Background="{DynamicResource MaterialDesignCardBackground}"
+                Padding="8"
+                UniformCornerRadius="4">
+                <Grid>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="*"/>
+                    </Grid.RowDefinitions>
+
                     <TextBlock 
+                        Grid.Row="0"
                         Text="Настройки связи" 
-                        FontSize="16" 
-                        FontWeight="SemiBold" 
-                        Margin="0,0,0,16"/>
+                        Style="{StaticResource MaterialDesignSubtitle2TextBlock}"
+                        Margin="0,0,0,8"/>
 
-                    <!-- COM-порт -->
-                    <Grid Margin="0,8">
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="150"/>
-                            <ColumnDefinition Width="*"/>
-                            <ColumnDefinition Width="Auto"/>
-                        </Grid.ColumnDefinitions>
-
-                        <TextBlock 
-                            Grid.Column="0" 
-                            Text="COM-порт:"
-                            VerticalAlignment="Center"/>
-
-                        <ComboBox 
-                            Grid.Column="1" 
-                            ItemsSource="{Binding AvailablePorts}"
-                            SelectedItem="{Binding SelectedPortName}"
-                            VerticalAlignment="Center"
-                            Margin="0,0,8,0"/>
-
-                        <Button 
-                            Grid.Column="2" 
-                            Content="Обновить" 
-                            Command="{Binding RefreshPortsCommand}"
-                            VerticalAlignment="Center"/>
-                    </Grid>
-
-                    <!-- Скорость передачи -->
-                    <Grid Margin="0,8">
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="150"/>
-                            <ColumnDefinition Width="*"/>
-                        </Grid.ColumnDefinitions>
-
-                        <TextBlock 
-                            Grid.Column="0" 
-                            Text="Скорость (бод):"
-                            VerticalAlignment="Center"/>
-
-                        <ComboBox 
-                            Grid.Column="1" 
-                            ItemsSource="{Binding BaudRates}"
-                            SelectedItem="{Binding SelectedBaudRate}"
-                            VerticalAlignment="Center"/>
-                    </Grid>
-
-                    <!-- Биты данных -->
-                    <Grid Margin="0,8">
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="150"/>
-                            <ColumnDefinition Width="*"/>
-                        </Grid.ColumnDefinitions>
-
-                        <TextBlock 
-                            Grid.Column="0" 
-                            Text="Биты данных:"
-                            VerticalAlignment="Center"/>
-
-                        <TextBox 
-                            Grid.Column="1" 
-                            Text="{Binding ComPortSettings.DataBits, UpdateSourceTrigger=PropertyChanged}"
-                            VerticalAlignment="Center"/>
-                    </Grid>
-
-                    <!-- Стоповые биты -->
-                    <Grid Margin="0,8">
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="150"/>
-                            <ColumnDefinition Width="*"/>
-                        </Grid.ColumnDefinitions>
-
-                        <TextBlock 
-                            Grid.Column="0" 
-                            Text="Стоповые биты:"
-                            VerticalAlignment="Center"/>
-
-                        <ComboBox 
-                            Grid.Column="1" 
-                            ItemsSource="{Binding StopBitsList}"
-                            SelectedItem="{Binding SelectedStopBits}"
-                            VerticalAlignment="Center">
-                            <ComboBox.ItemTemplate>
-                                <DataTemplate>
-                                    <TextBlock Text="{Binding Converter={StaticResource EnumToStringConverter}}"/>
-                                </DataTemplate>
-                            </ComboBox.ItemTemplate>
-                        </ComboBox>
-                    </Grid>
-
-                    <!-- Четность -->
-                    <Grid Margin="0,8">
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="150"/>
-                            <ColumnDefinition Width="*"/>
-                        </Grid.ColumnDefinitions>
-
-                        <TextBlock 
-                            Grid.Column="0" 
-                            Text="Четность:"
-                            VerticalAlignment="Center"/>
-
-                        <ComboBox 
-                            Grid.Column="1" 
-                            ItemsSource="{Binding ParityList}"
-                            SelectedItem="{Binding SelectedParity}"
-                            VerticalAlignment="Center">
-                            <ComboBox.ItemTemplate>
-                                <DataTemplate>
-                                    <TextBlock Text="{Binding Converter={StaticResource EnumToStringConverter}}"/>
-                                </DataTemplate>
-                            </ComboBox.ItemTemplate>
-                        </ComboBox>
-                    </Grid>
-
-
-                    <!-- Таймауты -->
-                    <Expander Header="Расширенные настройки" Margin="0,16,0,0">
-                        <StackPanel Margin="0,8,0,0">
-                            <!-- Таймаут чтения -->
+                    <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto">
+                        <StackPanel>
+                            <!-- COM Port -->
                             <Grid Margin="0,4">
                                 <Grid.ColumnDefinitions>
-                                    <ColumnDefinition Width="150"/>
+                                    <ColumnDefinition Width="120"/>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                </Grid.ColumnDefinitions>
+
+                                <TextBlock 
+                                    Grid.Column="0" 
+                                    Text="COM-порт:"
+                                    Style="{StaticResource MaterialDesignBody2TextBlock}"
+                                    VerticalAlignment="Center"/>
+
+                                <ComboBox 
+                                    Grid.Column="1" 
+                                    ItemsSource="{Binding AvailablePorts}"
+                                    SelectedItem="{Binding SelectedPortName}"
+                                    Style="{StaticResource MaterialDesignOutlinedComboBox}"
+                                    materialDesign:HintAssist.Hint="Выберите порт"
+                                    Margin="0,0,8,0"/>
+
+                                <Button 
+                                    Grid.Column="2" 
+                                    Content="Обновить" 
+                                    Command="{Binding RefreshPortsCommand}"
+                                    Style="{StaticResource MaterialDesignOutlinedButton}"
+                                    Padding="8,4"/>
+                            </Grid>
+
+                            <!-- Baud Rate -->
+                            <Grid Margin="0,4">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="120"/>
                                     <ColumnDefinition Width="*"/>
                                 </Grid.ColumnDefinitions>
 
                                 <TextBlock 
                                     Grid.Column="0" 
-                                    Text="Таймаут чтения (мс):"
+                                    Text="Скорость (бод):"
+                                    Style="{StaticResource MaterialDesignBody2TextBlock}"
                                     VerticalAlignment="Center"/>
 
-                                <TextBox 
+                                <ComboBox 
                                     Grid.Column="1" 
-                                    Text="{Binding ComPortSettings.ReadTimeout, UpdateSourceTrigger=PropertyChanged}"
-                                    VerticalAlignment="Center"/>
+                                    ItemsSource="{Binding BaudRates}"
+                                    SelectedItem="{Binding SelectedBaudRate}"
+                                    Style="{StaticResource MaterialDesignOutlinedComboBox}"
+                                    materialDesign:HintAssist.Hint="Скорость передачи"/>
                             </Grid>
 
-                            <!-- Таймаут записи -->
+                            <!-- Data Bits -->
                             <Grid Margin="0,4">
                                 <Grid.ColumnDefinitions>
-                                    <ColumnDefinition Width="150"/>
+                                    <ColumnDefinition Width="120"/>
                                     <ColumnDefinition Width="*"/>
                                 </Grid.ColumnDefinitions>
 
                                 <TextBlock 
                                     Grid.Column="0" 
-                                    Text="Таймаут записи (мс):"
+                                    Text="Биты данных:"
+                                    Style="{StaticResource MaterialDesignBody2TextBlock}"
                                     VerticalAlignment="Center"/>
 
                                 <TextBox 
                                     Grid.Column="1" 
-                                    Text="{Binding ComPortSettings.WriteTimeout, UpdateSourceTrigger=PropertyChanged}"
-                                    VerticalAlignment="Center"/>
+                                    Text="{Binding ComPortSettings.DataBits, UpdateSourceTrigger=PropertyChanged}"
+                                    Style="{StaticResource MaterialDesignOutlinedTextBox}"
+                                    materialDesign:HintAssist.Hint="Биты данных"/>
                             </Grid>
 
-                            <!-- Интервал опроса -->
+                            <!-- Stop Bits -->
                             <Grid Margin="0,4">
                                 <Grid.ColumnDefinitions>
-                                    <ColumnDefinition Width="150"/>
+                                    <ColumnDefinition Width="120"/>
                                     <ColumnDefinition Width="*"/>
                                 </Grid.ColumnDefinitions>
 
                                 <TextBlock 
                                     Grid.Column="0" 
-                                    Text="Интервал опроса (мс):"
+                                    Text="Стоповые биты:"
+                                    Style="{StaticResource MaterialDesignBody2TextBlock}"
                                     VerticalAlignment="Center"/>
 
-                                <TextBox 
+                                <ComboBox 
                                     Grid.Column="1" 
-                                    Text="{Binding ComPortSettings.PollingInterval, UpdateSourceTrigger=PropertyChanged}"
-                                    VerticalAlignment="Center"/>
+                                    ItemsSource="{Binding StopBitsList}"
+                                    SelectedItem="{Binding SelectedStopBits}"
+                                    Style="{StaticResource MaterialDesignOutlinedComboBox}"
+                                    materialDesign:HintAssist.Hint="Стоповые биты">
+                                    <ComboBox.ItemTemplate>
+                                        <DataTemplate>
+                                            <TextBlock Text="{Binding Converter={StaticResource EnumToStringConverter}}"/>
+                                        </DataTemplate>
+                                    </ComboBox.ItemTemplate>
+                                </ComboBox>
                             </Grid>
 
-                            <!-- Задержка ответа -->
+                            <!-- Parity -->
                             <Grid Margin="0,4">
                                 <Grid.ColumnDefinitions>
-                                    <ColumnDefinition Width="150"/>
+                                    <ColumnDefinition Width="120"/>
                                     <ColumnDefinition Width="*"/>
                                 </Grid.ColumnDefinitions>
 
                                 <TextBlock 
                                     Grid.Column="0" 
-                                    Text="Задержка ответа (мс):"
+                                    Text="Четность:"
+                                    Style="{StaticResource MaterialDesignBody2TextBlock}"
                                     VerticalAlignment="Center"/>
 
-                                <TextBox 
+                                <ComboBox 
                                     Grid.Column="1" 
-                                    Text="{Binding ComPortSettings.ResponseDelay, UpdateSourceTrigger=PropertyChanged}"
-                                    VerticalAlignment="Center"/>
+                                    ItemsSource="{Binding ParityList}"
+                                    SelectedItem="{Binding SelectedParity}"
+                                    Style="{StaticResource MaterialDesignOutlinedComboBox}"
+                                    materialDesign:HintAssist.Hint="Четность">
+                                    <ComboBox.ItemTemplate>
+                                        <DataTemplate>
+                                            <TextBlock Text="{Binding Converter={StaticResource EnumToStringConverter}}"/>
+                                        </DataTemplate>
+                                    </ComboBox.ItemTemplate>
+                                </ComboBox>
                             </Grid>
+
+                            <!-- Advanced Settings -->
+                            <Expander 
+                                Header="Расширенные настройки" 
+                                Style="{StaticResource MaterialDesignExpander}"
+                                Margin="0,8,0,0">
+                                <StackPanel Margin="0,8,0,0">
+                                    <!-- Read Timeout -->
+                                    <Grid Margin="0,4">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="150"/>
+                                            <ColumnDefinition Width="*"/>
+                                        </Grid.ColumnDefinitions>
+
+                                        <TextBlock 
+                                            Grid.Column="0" 
+                                            Text="Таймаут чтения (мс):"
+                                            Style="{StaticResource MaterialDesignBody2TextBlock}"
+                                            VerticalAlignment="Center"/>
+
+                                        <TextBox 
+                                            Grid.Column="1" 
+                                            Text="{Binding ComPortSettings.ReadTimeout, UpdateSourceTrigger=PropertyChanged}"
+                                            Style="{StaticResource MaterialDesignOutlinedTextBox}"
+                                            materialDesign:HintAssist.Hint="Таймаут"
+                                            Width="150"
+                                            HorizontalAlignment="Left"/>
+                                    </Grid>
+
+                                    <!-- Write Timeout -->
+                                    <Grid Margin="0,4">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="150"/>
+                                            <ColumnDefinition Width="*"/>
+                                        </Grid.ColumnDefinitions>
+
+                                        <TextBlock 
+                                            Grid.Column="0" 
+                                            Text="Таймаут записи (мс):"
+                                            Style="{StaticResource MaterialDesignBody2TextBlock}"
+                                            VerticalAlignment="Center"/>
+
+                                        <TextBox 
+                                            Grid.Column="1" 
+                                            Text="{Binding ComPortSettings.WriteTimeout, UpdateSourceTrigger=PropertyChanged}"
+                                            Style="{StaticResource MaterialDesignOutlinedTextBox}"
+                                            materialDesign:HintAssist.Hint="Таймаут"
+                                            Width="150"
+                                            HorizontalAlignment="Left"/>
+                                    </Grid>
+
+                                    <!-- Polling Interval -->
+                                    <Grid Margin="0,4">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="150"/>
+                                            <ColumnDefinition Width="*"/>
+                                        </Grid.ColumnDefinitions>
+
+                                        <TextBlock 
+                                            Grid.Column="0" 
+                                            Text="Интервал опроса (мс):"
+                                            Style="{StaticResource MaterialDesignBody2TextBlock}"
+                                            VerticalAlignment="Center"/>
+
+                                        <TextBox 
+                                            Grid.Column="1" 
+                                            Text="{Binding ComPortSettings.PollingInterval, UpdateSourceTrigger=PropertyChanged}"
+                                            Style="{StaticResource MaterialDesignOutlinedTextBox}"
+                                            materialDesign:HintAssist.Hint="Интервал"
+                                            Width="150"
+                                            HorizontalAlignment="Left"/>
+                                    </Grid>
+
+                                    <!-- Response Delay -->
+                                    <Grid Margin="0,4">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="150"/>
+                                            <ColumnDefinition Width="*"/>
+                                        </Grid.ColumnDefinitions>
+
+                                        <TextBlock 
+                                            Grid.Column="0" 
+                                            Text="Задержка ответа (мс):"
+                                            Style="{StaticResource MaterialDesignBody2TextBlock}"
+                                            VerticalAlignment="Center"/>
+
+                                        <TextBox 
+                                            Grid.Column="1" 
+                                            Text="{Binding ComPortSettings.ResponseDelay, UpdateSourceTrigger=PropertyChanged}"
+                                            Style="{StaticResource MaterialDesignOutlinedTextBox}"
+                                            materialDesign:HintAssist.Hint="Задержка"
+                                            Width="150"
+                                            HorizontalAlignment="Left"/>
+                                    </Grid>
+                                </StackPanel>
+                            </Expander>
                         </StackPanel>
-                    </Expander>
-                </StackPanel>
-            </Border>
+                    </ScrollViewer>
+                </Grid>
+            </materialDesign:Card>
 
-            <!-- Правая панель - настройки защит -->
-            <Border 
+            <!-- Right Panel - Protection Settings -->
+            <materialDesign:Card 
                 Grid.Column="1" 
-                BorderBrush="#CCCCCC" 
-                BorderThickness="1" 
-                Margin="8,0,0,0"
-                Padding="16"
-                Background="#F5F5F5"
-                CornerRadius="4">
+                Margin="6,0,0,0"
+                Background="{DynamicResource MaterialDesignCardBackground}"
+                Padding="8"
+                UniformCornerRadius="4">
                 <Grid>
                     <Grid.RowDefinitions>
                         <RowDefinition Height="Auto"/>
@@ -264,181 +305,194 @@
                     <TextBlock 
                         Grid.Row="0"
                         Text="Настройки защит" 
-                        FontSize="16" 
-                        FontWeight="SemiBold" 
-                        Margin="0,0,0,16"/>
+                        Style="{StaticResource MaterialDesignSubtitle2TextBlock}"
+                        Margin="0,0,0,8"/>
 
-                    <!-- Настройки порогов защит -->
+                    <!-- Protection Thresholds -->
                     <StackPanel Grid.Row="1">
-                        <!-- Давление масла -->
-                        <Grid Margin="0,8">
+                        <!-- Oil Pressure -->
+                        <Grid Margin="0,4">
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="*"/>
-                                <ColumnDefinition Width="Auto"/>
+                                <ColumnDefinition Width="120"/>
                             </Grid.ColumnDefinitions>
 
                             <TextBlock 
                                 Grid.Column="0" 
                                 Text="Минимальное давление масла (кг/см²):"
+                                Style="{StaticResource MaterialDesignBody2TextBlock}"
                                 VerticalAlignment="Center"/>
 
                             <TextBox 
                                 Grid.Column="1" 
-                                Width="100"
                                 Text="{Binding ProtectionThresholds.OilPressureMinThreshold, StringFormat=N2, UpdateSourceTrigger=PropertyChanged}"
-                                VerticalAlignment="Center"/>
+                                Style="{StaticResource MaterialDesignOutlinedTextBox}"
+                                materialDesign:HintAssist.Hint="Давление"/>
                         </Grid>
 
-                        <!-- Разделитель -->
-                        <Separator Margin="0,4"/>
+                        <Separator Margin="0,6" Style="{StaticResource MaterialDesignLightSeparator}"/>
 
-                        <!-- Обороты двигателя -->
-                        <Grid Margin="0,8">
+                        <!-- Engine Speed -->
+                        <Grid Margin="0,4">
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="*"/>
-                                <ColumnDefinition Width="Auto"/>
+                                <ColumnDefinition Width="120"/>
                             </Grid.ColumnDefinitions>
 
                             <TextBlock 
                                 Grid.Column="0" 
                                 Text="Максимальные обороты двигателя (об/мин):"
+                                Style="{StaticResource MaterialDesignBody2TextBlock}"
                                 VerticalAlignment="Center"/>
 
                             <TextBox 
                                 Grid.Column="1" 
-                                Width="100"
                                 Text="{Binding ProtectionThresholds.EngineSpeedMaxThreshold, StringFormat=N0, UpdateSourceTrigger=PropertyChanged}"
-                                VerticalAlignment="Center"/>
+                                Style="{StaticResource MaterialDesignOutlinedTextBox}"
+                                materialDesign:HintAssist.Hint="Обороты"/>
                         </Grid>
 
-                        <!-- Разделитель -->
-                        <Separator Margin="0,4"/>
+                        <Separator Margin="0,6" Style="{StaticResource MaterialDesignLightSeparator}"/>
 
-                        <!-- Давление наддува -->
-                        <Grid Margin="0,8">
+                        <!-- Boost Pressure -->
+                        <Grid Margin="0,4">
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="*"/>
-                                <ColumnDefinition Width="Auto"/>
+                                <ColumnDefinition Width="120"/>
                             </Grid.ColumnDefinitions>
 
                             <TextBlock 
                                 Grid.Column="0" 
                                 Text="Максимальное давление наддува (кг/см²):"
+                                Style="{StaticResource MaterialDesignBody2TextBlock}"
                                 VerticalAlignment="Center"/>
 
                             <TextBox 
                                 Grid.Column="1" 
-                                Width="100"
                                 Text="{Binding ProtectionThresholds.BoostPressureMaxThreshold, StringFormat=N2, UpdateSourceTrigger=PropertyChanged}"
-                                VerticalAlignment="Center"/>
+                                Style="{StaticResource MaterialDesignOutlinedTextBox}"
+                                materialDesign:HintAssist.Hint="Давление"/>
                         </Grid>
 
-                        <!-- Разделитель -->
-                        <Separator Margin="0,4"/>
+                        <Separator Margin="0,6" Style="{StaticResource MaterialDesignLightSeparator}"/>
 
-                        <!-- Температура масла -->
-                        <Grid Margin="0,8">
+                        <!-- Oil Temperature -->
+                        <Grid Margin="0,4">
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="*"/>
-                                <ColumnDefinition Width="Auto"/>
+                                <ColumnDefinition Width="120"/>
                             </Grid.ColumnDefinitions>
 
                             <TextBlock 
                                 Grid.Column="0" 
                                 Text="Максимальная температура масла (°C):"
+                                Style="{StaticResource MaterialDesignBody2TextBlock}"
                                 VerticalAlignment="Center"/>
 
                             <TextBox 
                                 Grid.Column="1" 
-                                Width="100"
                                 Text="{Binding ProtectionThresholds.OilTemperatureMaxThreshold, StringFormat=N1, UpdateSourceTrigger=PropertyChanged}"
-                                VerticalAlignment="Center"/>
+                                Style="{StaticResource MaterialDesignOutlinedTextBox}"
+                                materialDesign:HintAssist.Hint="Температура"/>
                         </Grid>
                     </StackPanel>
 
-                    <!-- Кнопки управления файлом настроек -->
-                    <StackPanel Grid.Row="2" Margin="0,16,0,0">
-                        <TextBlock 
-                            Text="Управление конфигурацией" 
-                            FontWeight="SemiBold" 
-                            Margin="0,0,0,8"/>
+                    <!-- Config File Management -->
+                    <materialDesign:Card
+                        Grid.Row="2"
+                        Background="{DynamicResource MaterialDesignBackground}"
+                        UniformCornerRadius="2"
+                        Margin="0,8,0,0"
+                        Padding="8">
+                        <StackPanel>
+                            <TextBlock 
+                                Text="Управление конфигурацией" 
+                                Style="{StaticResource MaterialDesignBody1TextBlock}"
+                                FontWeight="Medium"
+                                Margin="0,0,0,8"/>
 
-                        <Grid>
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="*"/>
-                                <ColumnDefinition Width="Auto"/>
-                                <ColumnDefinition Width="Auto"/>
-                            </Grid.ColumnDefinitions>
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                </Grid.ColumnDefinitions>
 
-                            <TextBox 
-                                Grid.Column="0" 
-                                Text="{Binding ConfigFilePath, UpdateSourceTrigger=PropertyChanged}"
-                                IsReadOnly="True"
-                                VerticalAlignment="Center"/>
+                                <TextBox 
+                                    Grid.Column="0" 
+                                    Text="{Binding ConfigFilePath, UpdateSourceTrigger=PropertyChanged}"
+                                    Style="{StaticResource MaterialDesignOutlinedTextBox}"
+                                    materialDesign:HintAssist.Hint="Путь к файлу конфигурации"
+                                    IsReadOnly="True"
+                                    Margin="0,0,8,0"/>
+
+                                <Button 
+                                    Grid.Column="1" 
+                                    Content="Загрузить" 
+                                    Command="{Binding LoadSettingsCommand}"
+                                    Style="{StaticResource MaterialDesignOutlinedButton}"
+                                    Margin="0,0,8,0"/>
+
+                                <Button 
+                                    Grid.Column="2" 
+                                    Content="Сохранить" 
+                                    Command="{Binding SaveSettingsCommand}"
+                                    Style="{StaticResource MaterialDesignOutlinedButton}"/>
+                            </Grid>
 
                             <Button 
-                                Grid.Column="1" 
-                                Content="Загрузить" 
-                                Command="{Binding LoadSettingsCommand}"
-                                Margin="8,0,0,0"
-                                VerticalAlignment="Center"/>
-
-                            <Button 
-                                Grid.Column="2" 
-                                Content="Сохранить" 
-                                Command="{Binding SaveSettingsCommand}"
-                                Margin="8,0,0,0"
-                                VerticalAlignment="Center"/>
-                        </Grid>
-
-                        <Button 
-                            Content="Сбросить настройки по умолчанию" 
-                            Command="{Binding ResetToDefaultCommand}"
-                            Margin="0,8,0,0"
-                            HorizontalAlignment="Right"/>
-                    </StackPanel>
+                                Content="Сбросить настройки по умолчанию" 
+                                Command="{Binding ResetToDefaultCommand}"
+                                Style="{StaticResource MaterialDesignFlatButton}"
+                                HorizontalAlignment="Right"
+                                Margin="0,8,0,0"/>
+                        </StackPanel>
+                    </materialDesign:Card>
                 </Grid>
-            </Border>
+            </materialDesign:Card>
         </Grid>
 
-        <!-- Статусная строка и кнопки -->
-        <Grid Grid.Row="2" Margin="0,16,0,0">
+        <!-- Status and Action Bar -->
+        <Grid Grid.Row="2" Margin="0,8,0,0">
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="*"/>
                 <ColumnDefinition Width="Auto"/>
                 <ColumnDefinition Width="Auto"/>
+                <ColumnDefinition Width="Auto"/>
             </Grid.ColumnDefinitions>
 
-            <!-- Статусное сообщение -->
+            <!-- Status Message -->
             <TextBlock 
                 Grid.Column="0" 
                 Text="{Binding StatusMessage}"
+                Style="{StaticResource MaterialDesignBody2TextBlock}"
                 VerticalAlignment="Center"/>
 
-            <!-- Кнопки подключения и отключения -->
+            <!-- Connection Control Buttons -->
             <Button 
                 Grid.Column="1" 
                 Content="Подключиться" 
                 Command="{Binding ConnectCommand}"
-                Margin="0,0,8,0"
-                Padding="8,4"/>
+                Style="{StaticResource MaterialDesignOutlinedButton}"
+                Margin="0,0,8,0"/>
 
             <Button 
                 Grid.Column="2" 
                 Content="Отключиться" 
                 Command="{Binding DisconnectCommand}"
-                Margin="0,0,8,0"
-                Padding="8,4"/>
+                Style="{StaticResource MaterialDesignOutlinedButton}"
+                Margin="0,0,8,0"/>
 
-            <!-- Кнопка применения настроек -->
+            <!-- Apply Settings -->
             <Button 
                 Grid.Column="3" 
                 Content="Применить настройки" 
                 Command="{Binding ApplySettingsCommand}"
                 IsEnabled="{Binding ApplyButtonEnabled}"
-                Padding="16,8"
-                Background="#2196F3"
-                Foreground="White"/>
+                Style="{StaticResource MaterialDesignRaisedButton}"
+                materialDesign:ButtonAssist.CornerRadius="2"
+                Background="{DynamicResource PrimaryHueMidBrush}"
+                Foreground="{DynamicResource PrimaryHueMidForegroundBrush}"/>
         </Grid>
     </Grid>
 </UserControl>

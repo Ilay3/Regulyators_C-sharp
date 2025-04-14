@@ -530,7 +530,6 @@ namespace Regulyators.UI.ViewModels
                     _seriesPlots[series] = scatter;
                 }
 
-                // Настройка легенды
                 _mainPlot.Plot.Legend(location: Alignment.UpperRight);
 
                 // Устанавливаем начальные границы осей
@@ -566,7 +565,7 @@ namespace Regulyators.UI.ViewModels
                     return;
                 }
 
-                // При первом получении данных обновляем UI (IsConnected, StatusMessage) - если нужно
+                // При первом получении данных обновляем UI
                 Application.Current.Dispatcher.Invoke(() =>
                 {
                     if (!IsConnected)
@@ -587,7 +586,6 @@ namespace Regulyators.UI.ViewModels
                     EngineParameters.Timestamp = parameters.Timestamp;
                 });
 
-                // Вместо немедленного UpdateGraph() просто складываем данные в буфер
                 lock (_bufferLock)
                 {
                     _incomingDataBuffer.Add(parameters);
@@ -612,7 +610,7 @@ namespace Regulyators.UI.ViewModels
         /// </summary>
         private void ProcessBufferedData()
         {
-            // 1) Извлекаем накопленные данные из буфера
+            //Извлекаем накопленные данные из буфера
             List<EngineParameters> newData = null;
             lock (_bufferLock)
             {
@@ -629,7 +627,7 @@ namespace Regulyators.UI.ViewModels
                 return;
             }
 
-            // 2) Добавляем точки в наши коллекции
+            // Добавляем точки в наши коллекции
             foreach (var p in newData)
             {
                 if (_startTime == null)
@@ -645,7 +643,7 @@ namespace Regulyators.UI.ViewModels
                 AddDataPoint("Температура масла", x, p.OilTemperature);
             }
 
-            // 3) Обновляем график только если он инициализирован
+            // Обновляем график только если он инициализирован
             if (_isGraphInitialized && _mainPlot != null)
             {
                 try
@@ -1045,24 +1043,24 @@ namespace Regulyators.UI.ViewModels
                 {
                     var worksheet = workbook.Worksheets.Add("Chart");
 
-                    // 1) Сохраняем график во ВРЕМЕННЫЙ PNG-файл
+                    // Сохраняем график во ВРЕМЕННЫЙ PNG-файл
                     string tempFile = System.IO.Path.GetTempFileName() + ".png";
                     _mainPlot.Plot.SaveFig(tempFile);
 
-                    // 2) Загружаем файл в MemoryStream
+                    // Загружаем файл в MemoryStream
                     byte[] fileBytes = File.ReadAllBytes(tempFile);
                     using (var ms = new MemoryStream(fileBytes))
                     {
-                        // 3) Добавляем картинку из Stream
+                        // 3Добавляем картинку из Stream
                         var pic = worksheet.AddPicture(ms, "ChartImage")
-                                           .MoveTo(worksheet.Cell(1, 1)) // вставка в A1
-                                           .WithSize(800, 600);          // ширина/высота в пикселях
+                                           .MoveTo(worksheet.Cell(1, 1))
+                                           .WithSize(800, 600); 
                     }
 
-                    // (Опционально) удаляем временный файл
+                    // Удаляем временный файл
                     File.Delete(tempFile);
 
-                    // 4) Сохраняем Excel
+                    // Сохраняем Excel
                     workbook.SaveAs(dialog.FileName);
                 }
 
@@ -1188,7 +1186,6 @@ namespace Regulyators.UI.ViewModels
         {
             base.ReleaseMangedResources();
 
-            // НЕ вызываем ShutDown() здесь, чтобы сервис продолжал работать
             // Просто освобождаем ресурсы UI для предотвращения утечек
             ReleaseViewResources();
         }

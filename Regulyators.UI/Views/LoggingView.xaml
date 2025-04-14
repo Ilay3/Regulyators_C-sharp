@@ -5,48 +5,172 @@
     xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006" 
     xmlns:d="http://schemas.microsoft.com/expression/blend/2008" 
     xmlns:local="clr-namespace:Regulyators.UI.Views"
+    xmlns:materialDesign="http://materialdesigninxaml.net/winfx/xaml/themes"
     mc:Ignorable="d" 
-    d:DesignHeight="600" d:DesignWidth="800">
+    d:DesignHeight="850" d:DesignWidth="1360"
+    Background="{DynamicResource MaterialDesignPaper}">
 
-    <Grid Margin="16">
+    <Grid Margin="12">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto"/>
             <RowDefinition Height="*"/>
             <RowDefinition Height="Auto"/>
         </Grid.RowDefinitions>
 
-        <!-- Заголовок -->
-        <TextBlock 
-            Grid.Row="0"
-            Text="Журнал событий системы" 
-            FontSize="18" 
-            FontWeight="Bold" 
-            Margin="0,0,0,16"/>
-
-        <!-- Таблица с журналом -->
-        <DataGrid 
-            Grid.Row="1"
-            ItemsSource="{Binding Logs}"
-            AutoGenerateColumns="False"
-            IsReadOnly="True"
-            GridLinesVisibility="Horizontal"
-            RowBackground="White"
-            AlternatingRowBackground="#F5F5F5"
-            CanUserResizeRows="False"
-            CanUserAddRows="False"
-            CanUserDeleteRows="False">
-            <DataGrid.Columns>
-                <DataGridTextColumn Header="Время" Binding="{Binding Timestamp, StringFormat='{}{0:dd.MM.yyyy HH:mm:ss}'}" Width="150"/>
-                <DataGridTextColumn Header="Тип" Binding="{Binding Type}" Width="120"/>
-                <DataGridTextColumn Header="Сообщение" Binding="{Binding Message}" Width="*"/>
-                <DataGridTextColumn Header="Подробности" Binding="{Binding Details}" Width="*"/>
-            </DataGrid.Columns>
-        </DataGrid>
-
-        <!-- Кнопки -->
-        <StackPanel Grid.Row="2" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,16,0,0">
-            <Button Content="Очистить журнал" Command="{Binding ClearLogsCommand}" Margin="0,0,8,0"/>
-            
+        <!-- Header -->
+        <StackPanel Grid.Row="0" Margin="0,0,0,8">
+            <TextBlock 
+                Text="ЖУРНАЛ СОБЫТИЙ СИСТЕМЫ" 
+                Style="{StaticResource MaterialDesignHeadline6TextBlock}"
+                Foreground="{DynamicResource PrimaryHueMidBrush}"
+                Margin="0,0,0,2"/>
+            <TextBlock 
+                Text="Просмотр и анализ событий, сообщений и ошибок работы системы"
+                Style="{StaticResource MaterialDesignBody2TextBlock}"
+                Opacity="0.6"/>
         </StackPanel>
+
+        <!-- Log table -->
+        <materialDesign:Card 
+            Grid.Row="1"
+            Background="{DynamicResource MaterialDesignCardBackground}"
+            UniformCornerRadius="4"
+            Padding="8">
+            <Grid>
+                <!-- Controls panel at the top -->
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="*"/>
+                </Grid.RowDefinitions>
+
+                <!-- Filter and search controls -->
+                <DockPanel Grid.Row="0" Margin="0,0,0,8" LastChildFill="False">
+                    <ComboBox 
+                        DockPanel.Dock="Left"
+                        Style="{StaticResource MaterialDesignOutlinedComboBox}"
+                        materialDesign:HintAssist.Hint="Фильтр по типу"
+                        Width="200"
+                        Margin="0,0,8,0"
+                        ItemsSource="{Binding LogTypes}"
+                        SelectedItem="{Binding SelectedLogType, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}">
+                    </ComboBox>
+
+                    <TextBox 
+                        DockPanel.Dock="Left"
+                        Style="{StaticResource MaterialDesignOutlinedTextBox}"
+                        materialDesign:HintAssist.Hint="Поиск по тексту"
+                        Width="300"
+                        Text="{Binding SearchText, UpdateSourceTrigger=PropertyChanged}">
+                        <TextBox.InputBindings>
+                            <KeyBinding Key="Return" Command="{Binding ApplySearchCommand}"/>
+                        </TextBox.InputBindings>
+                    </TextBox>
+
+                    <Button 
+                        DockPanel.Dock="Left"
+                        Content="Найти" 
+                        Command="{Binding ApplySearchCommand}"
+                        Style="{StaticResource MaterialDesignOutlinedButton}"
+                        Margin="8,0,0,0"/>
+                </DockPanel>
+
+                <!-- DataGrid with logs -->
+                <DataGrid 
+                    Grid.Row="1"
+                    ItemsSource="{Binding FilteredLogs}"
+                    AutoGenerateColumns="False"
+                    IsReadOnly="True"
+                    GridLinesVisibility="Horizontal"
+                    RowBackground="White"
+                    AlternatingRowBackground="#F5F5F5"
+                    CanUserResizeRows="False"
+                    CanUserAddRows="False"
+                    CanUserDeleteRows="False"
+                    HeadersVisibility="Column"
+                    BorderThickness="1"
+                    BorderBrush="{DynamicResource MaterialDesignDivider}"
+                    Background="{DynamicResource MaterialDesignBackground}"
+                    materialDesign:DataGridAssist.CellPadding="4"
+                    materialDesign:DataGridAssist.ColumnHeaderPadding="4"
+                    VirtualizingPanel.IsVirtualizing="True"
+                    VirtualizingPanel.VirtualizationMode="Recycling">
+                    <DataGrid.Resources>
+                        <SolidColorBrush x:Key="{x:Static SystemColors.HighlightBrushKey}" Color="{DynamicResource PrimaryHueMidColor}" Opacity="0.3"/>
+                        <SolidColorBrush x:Key="{x:Static SystemColors.ControlBrushKey}" Color="{DynamicResource PrimaryHueMidColor}" Opacity="0.15"/>
+                    </DataGrid.Resources>
+                    <DataGrid.Columns>
+                        <DataGridTextColumn Header="Время" Binding="{Binding Timestamp, StringFormat='{}{0:dd.MM.yyyy HH:mm:ss}'}" Width="150">
+                            <DataGridTextColumn.ElementStyle>
+                                <Style TargetType="TextBlock">
+                                    <Setter Property="VerticalAlignment" Value="Center"/>
+                                    <Setter Property="Padding" Value="4,0"/>
+                                    <Setter Property="TextWrapping" Value="NoWrap"/>
+                                </Style>
+                            </DataGridTextColumn.ElementStyle>
+                        </DataGridTextColumn>
+                        <DataGridTextColumn Header="Тип" Binding="{Binding Type}" Width="120">
+                            <DataGridTextColumn.ElementStyle>
+                                <Style TargetType="TextBlock">
+                                    <Setter Property="VerticalAlignment" Value="Center"/>
+                                    <Setter Property="Padding" Value="4,0"/>
+                                    <Setter Property="TextWrapping" Value="NoWrap"/>
+                                </Style>
+                            </DataGridTextColumn.ElementStyle>
+                        </DataGridTextColumn>
+                        <DataGridTextColumn Header="Сообщение" Binding="{Binding Message}" Width="*">
+                            <DataGridTextColumn.ElementStyle>
+                                <Style TargetType="TextBlock">
+                                    <Setter Property="VerticalAlignment" Value="Center"/>
+                                    <Setter Property="Padding" Value="4,0"/>
+                                    <Setter Property="TextWrapping" Value="Wrap"/>
+                                </Style>
+                            </DataGridTextColumn.ElementStyle>
+                        </DataGridTextColumn>
+                        <DataGridTextColumn Header="Подробности" Binding="{Binding Details}" Width="*">
+                            <DataGridTextColumn.ElementStyle>
+                                <Style TargetType="TextBlock">
+                                    <Setter Property="VerticalAlignment" Value="Center"/>
+                                    <Setter Property="Padding" Value="4,0"/>
+                                    <Setter Property="TextWrapping" Value="Wrap"/>
+                                </Style>
+                            </DataGridTextColumn.ElementStyle>
+                        </DataGridTextColumn>
+                    </DataGrid.Columns>
+                </DataGrid>
+            </Grid>
+        </materialDesign:Card>
+
+        <!-- Button Panel -->
+        <Grid Grid.Row="2" Margin="0,8,0,0">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*"/>
+                <ColumnDefinition Width="Auto"/>
+                <ColumnDefinition Width="Auto"/>
+            </Grid.ColumnDefinitions>
+
+            <!-- Status text -->
+            <TextBlock 
+                Grid.Column="0"
+                Text="{Binding StatusMessage}" 
+                VerticalAlignment="Center"
+                Style="{StaticResource MaterialDesignBody2TextBlock}"/>
+
+            <!-- Action buttons -->
+            <Button 
+                Grid.Column="1"
+                Content="Экспорт журнала" 
+                Command="{Binding ExportLogsCommand}"
+                Style="{StaticResource MaterialDesignOutlinedButton}"
+                Margin="0,0,8,0"/>
+
+            <Button 
+                Grid.Column="2"
+                Content="Очистить журнал" 
+                Command="{Binding ClearLogsCommand}"
+                Style="{StaticResource MaterialDesignRaisedButton}"
+                materialDesign:ButtonAssist.CornerRadius="2"
+                Background="{DynamicResource PrimaryHueMidBrush}"
+                Foreground="{DynamicResource PrimaryHueMidForegroundBrush}"/>
+        </Grid>
     </Grid>
 </UserControl>

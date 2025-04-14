@@ -5,34 +5,38 @@
     xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006" 
     xmlns:d="http://schemas.microsoft.com/expression/blend/2008" 
     xmlns:local="clr-namespace:Regulyators.UI.Views"
+    xmlns:materialDesign="http://materialdesigninxaml.net/winfx/xaml/themes"
     xmlns:controls="clr-namespace:Regulyators.UI.Controls"
     mc:Ignorable="d" 
-    d:DesignHeight="600" d:DesignWidth="800">
+    d:DesignHeight="850" d:DesignWidth="1360"
+    Background="{DynamicResource MaterialDesignPaper}">
 
-    <Grid Margin="16">
+    <Grid Margin="12">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto"/>
             <RowDefinition Height="*"/>
             <RowDefinition Height="Auto"/>
         </Grid.RowDefinitions>
 
-        <!-- Заголовок -->
-        <TextBlock 
-            Grid.Row="0"
-            Text="Аналоговые индикаторы параметров" 
-            FontSize="18" 
-            FontWeight="Bold" 
-            Margin="0,0,0,16"/>
+        <!-- Header -->
+        <StackPanel Grid.Row="0" Margin="0,0,0,8">
+            <TextBlock 
+                Text="АНАЛОГОВЫЕ ИНДИКАТОРЫ ПАРАМЕТРОВ" 
+                Style="{StaticResource MaterialDesignHeadline6TextBlock}"
+                Foreground="{DynamicResource PrimaryHueMidBrush}"
+                Margin="0,0,0,2"/>
+            <TextBlock 
+                Text="Визуализация текущих параметров работы двигателя в виде аналоговых приборов"
+                Style="{StaticResource MaterialDesignBody2TextBlock}"
+                Opacity="0.6"/>
+        </StackPanel>
 
-        <!-- Панель индикаторов -->
-        <Border 
+        <!-- Gauges Panel -->
+        <materialDesign:Card 
             Grid.Row="1"
-            BorderBrush="#CCCCCC" 
-            BorderThickness="1" 
-            Padding="16"
-            Background="#F5F5F5"
-            CornerRadius="4">
-
+            Background="{DynamicResource MaterialDesignCardBackground}"
+            UniformCornerRadius="4"
+            Padding="8">
             <Grid>
                 <Grid.RowDefinitions>
                     <RowDefinition Height="*"/>
@@ -44,124 +48,173 @@
                     <ColumnDefinition Width="*"/>
                 </Grid.ColumnDefinitions>
 
-                <!-- Обороты двигателя -->
-                <controls:GaugeControl 
+                <!-- Engine Speed Gauge -->
+                <materialDesign:Card
                     Grid.Row="0" 
                     Grid.Column="0"
-                    Title="Обороты двигателя"
-                    UnitLabel="об/мин"
-                    Minimum="0"
-                    Maximum="2500"
-                    CriticalMaxValue="2200"
-                    Value="{Binding EngineParameters.EngineSpeed}"
-                    NeedleBrush="Red"/>
+                    Background="{DynamicResource MaterialDesignBackground}"
+                    UniformCornerRadius="2"
+                    Margin="2"
+                    Padding="8">
+                    <controls:GaugeControl 
+                        Title="Обороты двигателя"
+                        UnitLabel="об/мин"
+                        Minimum="0"
+                        Maximum="2500"
+                        CriticalMaxValue="2200"
+                        Value="{Binding EngineParameters.EngineSpeed}"
+                        NeedleBrush="Red"/>
+                </materialDesign:Card>
 
-                <!-- Давление масла -->
-                <controls:GaugeControl 
+                <!-- Oil Pressure Gauge -->
+                <materialDesign:Card
                     Grid.Row="0" 
                     Grid.Column="1"
-                    Title="Давление масла"
-                    UnitLabel="кг/см²"
-                    Minimum="0"
-                    Maximum="5"
-                    CriticalMinValue="1.5"
-                    Value="{Binding EngineParameters.OilPressure}"
-                    NeedleBrush="Blue"/>
+                    Background="{DynamicResource MaterialDesignBackground}"
+                    UniformCornerRadius="2"
+                    Margin="2"
+                    Padding="8">
+                    <controls:GaugeControl 
+                        Title="Давление масла"
+                        UnitLabel="кг/см²"
+                        Minimum="0"
+                        Maximum="5"
+                        CriticalMinValue="1.5"
+                        Value="{Binding EngineParameters.OilPressure}"
+                        NeedleBrush="Blue"/>
+                </materialDesign:Card>
 
-                <!-- Давление наддува -->
-                <controls:GaugeControl 
+                <!-- Boost Pressure Gauge -->
+                <materialDesign:Card
                     Grid.Row="0" 
                     Grid.Column="2"
-                    Title="Давление наддува"
-                    UnitLabel="кг/см²"
-                    Minimum="0"
-                    Maximum="4"
-                    CriticalMaxValue="2.5"
-                    Value="{Binding EngineParameters.BoostPressure}"
-                    NeedleBrush="Green"/>
+                    Background="{DynamicResource MaterialDesignBackground}"
+                    UniformCornerRadius="2"
+                    Margin="2"
+                    Padding="8">
+                    <controls:GaugeControl 
+                        Title="Давление наддува"
+                        UnitLabel="кг/см²"
+                        Minimum="0"
+                        Maximum="4"
+                        CriticalMaxValue="2.5"
+                        Value="{Binding EngineParameters.BoostPressure}"
+                        NeedleBrush="Green"/>
+                </materialDesign:Card>
 
-                <!-- Температура масла -->
-                <controls:GaugeControl 
+                <!-- Oil Temperature Gauge -->
+                <materialDesign:Card
                     Grid.Row="1" 
                     Grid.Column="0"
-                    Title="Температура масла"
-                    UnitLabel="°C"
-                    Minimum="0"
-                    Maximum="150"
-                    CriticalMaxValue="110"
-                    Value="{Binding EngineParameters.OilTemperature}"
-                    NeedleBrush="Orange"/>
+                    Background="{DynamicResource MaterialDesignBackground}"
+                    UniformCornerRadius="2"
+                    Margin="2"
+                    Padding="8">
+                    <controls:GaugeControl 
+                        Title="Температура масла"
+                        UnitLabel="°C"
+                        Minimum="0"
+                        Maximum="150"
+                        CriticalMaxValue="110"
+                        Value="{Binding EngineParameters.OilTemperature}"
+                        NeedleBrush="Orange"/>
+                </materialDesign:Card>
 
-                <!-- Обороты турбокомпрессора -->
-                <controls:GaugeControl 
+                <!-- Turbo Speed Gauge -->
+                <materialDesign:Card
                     Grid.Row="1" 
                     Grid.Column="1"
-                    Title="Обороты турбокомпрессора"
-                    UnitLabel="об/мин"
-                    Minimum="0"
-                    Maximum="25000"
-                    MajorTickCount="5"
-                    Value="{Binding EngineParameters.TurboCompressorSpeed}"
-                    NeedleBrush="Purple"/>
+                    Background="{DynamicResource MaterialDesignBackground}"
+                    UniformCornerRadius="2"
+                    Margin="2"
+                    Padding="8">
+                    <controls:GaugeControl 
+                        Title="Обороты турбокомпрессора"
+                        UnitLabel="об/мин"
+                        Minimum="0"
+                        Maximum="25000"
+                        MajorTickCount="5"
+                        Value="{Binding EngineParameters.TurboCompressorSpeed}"
+                        NeedleBrush="Purple"/>
+                </materialDesign:Card>
 
-                <!-- Положение рейки -->
-                <controls:GaugeControl 
+                <!-- Rack Position Gauge -->
+                <materialDesign:Card
                     Grid.Row="1" 
                     Grid.Column="2"
-                    Title="Положение рейки"
-                    UnitLabel="код"
-                    Minimum="0"
-                    Maximum="30"
-                    Value="{Binding EngineParameters.RackPosition}"
-                    NeedleBrush="Magenta"/>
+                    Background="{DynamicResource MaterialDesignBackground}"
+                    UniformCornerRadius="2"
+                    Margin="2"
+                    Padding="8">
+                    <controls:GaugeControl 
+                        Title="Положение рейки"
+                        UnitLabel="код"
+                        Minimum="0"
+                        Maximum="30"
+                        Value="{Binding EngineParameters.RackPosition}"
+                        NeedleBrush="Magenta"/>
+                </materialDesign:Card>
             </Grid>
-        </Border>
+        </materialDesign:Card>
 
-        <!-- Настройки отображения -->
-        <Border 
+        <!-- Control Panel -->
+        <materialDesign:Card 
             Grid.Row="2"
-            BorderBrush="#CCCCCC" 
-            BorderThickness="1" 
-            Padding="16"
-            Background="#F5F5F5"
-            CornerRadius="4"
-            Margin="0,16,0,0">
+            Background="{DynamicResource MaterialDesignCardBackground}"
+            UniformCornerRadius="4"
+            Padding="8"
+            Margin="0,8,0,0">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
 
-            <StackPanel>
-                <TextBlock 
-                    Text="Настройки отображения" 
-                    FontSize="14" 
-                    FontWeight="SemiBold" 
-                    Margin="0,0,0,8"/>
-
-                <!-- Переключатель режимов обновления -->
-                <StackPanel Orientation="Horizontal" Margin="0,8">
+                <!-- Update Rate Control -->
+                <StackPanel Grid.Column="0" Orientation="Horizontal">
                     <TextBlock 
                         Text="Частота обновления:" 
+                        Style="{StaticResource MaterialDesignBody2TextBlock}"
                         VerticalAlignment="Center"
-                        Margin="0,0,16,0"/>
+                        Margin="0,0,8,0"/>
 
                     <ComboBox 
-                        Width="150"
-                        SelectedItem="{Binding SelectedUpdateInterval}">
+                        Width="160"
+                        SelectedItem="{Binding SelectedUpdateInterval}"
+                        Style="{StaticResource MaterialDesignOutlinedComboBox}"
+                        materialDesign:HintAssist.Hint="Частота обновления">
                         <ComboBoxItem Content="Высокая (100 мс)"/>
                         <ComboBoxItem Content="Средняя (500 мс)"/>
                         <ComboBoxItem Content="Низкая (1000 мс)"/>
                     </ComboBox>
                 </StackPanel>
 
-                <!-- Кнопки управления -->
-                <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,8,0,0">
+                <!-- Status Message -->
+                <TextBlock 
+                    Grid.Column="1"
+                    Text="{Binding StatusMessage}"
+                    Style="{StaticResource MaterialDesignBody2TextBlock}"
+                    VerticalAlignment="Center"
+                    HorizontalAlignment="Center"/>
+
+                <!-- Action Buttons -->
+                <StackPanel Grid.Column="2" Orientation="Horizontal">
                     <Button 
                         Content="Сохранить снимок" 
                         Command="{Binding SaveSnapshotCommand}"
+                        Style="{StaticResource MaterialDesignOutlinedButton}"
                         Margin="0,0,8,0"/>
 
                     <Button 
                         Content="Обновить"
-                        Command="{Binding RefreshGaugesCommand}"/>
+                        Command="{Binding RefreshGaugesCommand}"
+                        Style="{StaticResource MaterialDesignRaisedButton}"
+                        materialDesign:ButtonAssist.CornerRadius="2"
+                        Background="{DynamicResource PrimaryHueMidBrush}"
+                        Foreground="{DynamicResource PrimaryHueMidForegroundBrush}"/>
                 </StackPanel>
-            </StackPanel>
-        </Border>
+            </Grid>
+        </materialDesign:Card>
     </Grid>
 </UserControl>

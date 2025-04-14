@@ -5,194 +5,213 @@
     xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006" 
     xmlns:d="http://schemas.microsoft.com/expression/blend/2008" 
     xmlns:local="clr-namespace:Regulyators.UI.Views"
+    xmlns:materialDesign="http://materialdesigninxaml.net/winfx/xaml/themes"
     mc:Ignorable="d" 
-    d:DesignHeight="600" d:DesignWidth="800">
+    d:DesignHeight="850" d:DesignWidth="1360"
+    Background="{DynamicResource MaterialDesignPaper}">
 
-    <Grid Margin="16">
+    <Grid Margin="12">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto"/>
             <RowDefinition Height="*"/>
         </Grid.RowDefinitions>
 
-        <!-- Заголовок -->
-        <TextBlock 
-            Grid.Row="0"
-            Text="Управление двигателем" 
-            FontSize="18" 
-            FontWeight="Bold" 
-            Margin="0,0,0,16"/>
+        <!-- Header -->
+        <StackPanel Grid.Row="0" Margin="0,0,0,8">
+            <TextBlock 
+                Text="УПРАВЛЕНИЕ ДВИГАТЕЛЕМ" 
+                Style="{StaticResource MaterialDesignHeadline6TextBlock}"
+                Foreground="{DynamicResource PrimaryHueMidBrush}"
+                Margin="0,0,0,2"/>
+            <TextBlock 
+                Text="Управление параметрами и режимами работы двигателя"
+                Style="{StaticResource MaterialDesignBody2TextBlock}"
+                Opacity="0.6"/>
+        </StackPanel>
 
-        <!-- Основное содержимое -->
+        <!-- Main Content -->
         <Grid Grid.Row="1">
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="*" />
                 <ColumnDefinition Width="*" />
             </Grid.ColumnDefinitions>
 
-            <!-- Левая панель - элементы управления -->
-            <Border 
+            <!-- Left Panel - Controls -->
+            <materialDesign:Card 
                 Grid.Column="0" 
-                BorderBrush="#CCCCCC" 
-                BorderThickness="1" 
-                Margin="0,0,8,0"
-                Padding="16"
-                Background="#F5F5F5"
-                CornerRadius="4">
+                Margin="0,0,6,0"
+                Background="{DynamicResource MaterialDesignCardBackground}"
+                Padding="8"
+                UniformCornerRadius="4">
                 <StackPanel>
-                    <TextBlock 
-                        Text="Управление двигателем" 
-                        FontSize="16" 
-                        FontWeight="SemiBold" 
-                        Margin="0,0,0,16"/>
+                    <!-- Engine Mode -->
+                    <materialDesign:Card
+                        Background="{DynamicResource MaterialDesignBackground}"
+                        UniformCornerRadius="2"
+                        Margin="0,0,0,8"
+                        Padding="8">
+                        <StackPanel>
+                            <TextBlock 
+                                Text="Режим работы" 
+                                Style="{StaticResource MaterialDesignSubtitle2TextBlock}"
+                                Margin="0,0,0,6"/>
 
-                    <!-- Режим работы двигателя -->
-                    <GroupBox Header="Режим работы" Margin="0,0,0,16">
-                        <StackPanel Orientation="Horizontal" Margin="8">
-                            <RadioButton 
-                                Content="ОСТАНОВ" 
-                                IsChecked="{Binding IsEngineStop}"
-                                Command="{Binding SetEngineModeCommand}"
-                                CommandParameter="Stop"
-                                Margin="0,0,16,0" Width="87"/>
+                            <WrapPanel>
+                                <RadioButton 
+                                    Content="ОСТАНОВ" 
+                                    IsChecked="{Binding IsEngineStop}"
+                                    Command="{Binding SetEngineModeCommand}"
+                                    CommandParameter="Stop"
+                                    Style="{StaticResource MaterialDesignChoiceChipPrimaryOutlineRadioButton}"
+                                    Margin="0,0,8,0"/>
 
-                            <RadioButton 
-                                Content="РАБОТА" 
-                                IsChecked="{Binding IsEngineRun}"
-                                Command="{Binding SetEngineModeCommand}"
-                                CommandParameter="Run"/>
+                                <RadioButton 
+                                    Content="РАБОТА" 
+                                    IsChecked="{Binding IsEngineRun}"
+                                    Command="{Binding SetEngineModeCommand}"
+                                    CommandParameter="Run"
+                                    Style="{StaticResource MaterialDesignChoiceChipPrimaryOutlineRadioButton}"/>
+                            </WrapPanel>
                         </StackPanel>
-                    </GroupBox>
+                    </materialDesign:Card>
 
-                    <!-- Тип нагрузки -->
-                    <GroupBox Header="Тип нагрузки" Margin="0,0,0,16">
-                        <StackPanel Orientation="Horizontal" Margin="8">
-                            <RadioButton 
-                                Content="Под нагрузкой" 
-                                IsChecked="{Binding IsLoaded}"
-                                Command="{Binding SetLoadTypeCommand}"
-                                CommandParameter="Loaded"
-                                Margin="0,0,16,0"/>
+                    <!-- Load Type -->
+                    <materialDesign:Card
+                        Background="{DynamicResource MaterialDesignBackground}"
+                        UniformCornerRadius="2"
+                        Margin="0,0,0,8"
+                        Padding="8">
+                        <StackPanel>
+                            <TextBlock 
+                                Text="Тип нагрузки" 
+                                Style="{StaticResource MaterialDesignSubtitle2TextBlock}"
+                                Margin="0,0,0,6"/>
 
-                            <RadioButton 
-                                Content="Холостой ход" 
-                                IsChecked="{Binding IsIdle}"
-                                Command="{Binding SetLoadTypeCommand}"
-                                CommandParameter="Idle"
-                                Margin="0,0,16,0"/>
+                            <WrapPanel>
+                                <RadioButton 
+                                    Content="Под нагрузкой" 
+                                    IsChecked="{Binding IsLoaded}"
+                                    Command="{Binding SetLoadTypeCommand}"
+                                    CommandParameter="Loaded"
+                                    Style="{StaticResource MaterialDesignChoiceChipAccentOutlineRadioButton}"
+                                    Margin="0,0,8,4"/>
 
-                            <RadioButton 
-                                Content="Буксование" 
-                                IsChecked="{Binding IsSlipping}"
-                                Command="{Binding SetLoadTypeCommand}"
-                                CommandParameter="Slipping"/>
+                                <RadioButton 
+                                    Content="Холостой ход" 
+                                    IsChecked="{Binding IsIdle}"
+                                    Command="{Binding SetLoadTypeCommand}"
+                                    CommandParameter="Idle"
+                                    Style="{StaticResource MaterialDesignChoiceChipAccentOutlineRadioButton}"
+                                    Margin="0,0,8,4"/>
+
+                                <RadioButton 
+                                    Content="Буксование" 
+                                    IsChecked="{Binding IsSlipping}"
+                                    Command="{Binding SetLoadTypeCommand}"
+                                    CommandParameter="Slipping"
+                                    Style="{StaticResource MaterialDesignChoiceChipAccentOutlineRadioButton}"/>
+                            </WrapPanel>
                         </StackPanel>
-                    </GroupBox>
+                    </materialDesign:Card>
 
-                    <!-- Задание оборотов двигателя -->
-                    <GroupBox Header="Задание оборотов двигателя (об/мин)" Margin="0,0,0,16">
-                        <Grid Margin="8">
-                            <Grid.RowDefinitions>
-                                <RowDefinition Height="Auto"/>
-                                <RowDefinition Height="Auto"/>
-                            </Grid.RowDefinitions>
+                    <!-- Engine Speed -->
+                    <materialDesign:Card
+                        Background="{DynamicResource MaterialDesignBackground}"
+                        UniformCornerRadius="2"
+                        Margin="0,0,0,8"
+                        Padding="8">
+                        <StackPanel>
+                            <TextBlock 
+                                Text="Обороты двигателя (об/мин)" 
+                                Style="{StaticResource MaterialDesignSubtitle2TextBlock}"
+                                Margin="0,0,0,6"/>
 
                             <Slider 
-                                Grid.Row="0"
                                 Minimum="0" 
                                 Maximum="2400" 
                                 Value="{Binding EngineControl.TargetEngineSpeed}"
                                 TickFrequency="100"
                                 TickPlacement="BottomRight"
                                 IsSnapToTickEnabled="True"
-                                Margin="0,8"/>
+                                Style="{StaticResource MaterialDesignDiscreteSlider}"
+                                Margin="0,4"/>
 
-                            <StackPanel 
-                                Grid.Row="1" 
-                                Orientation="Horizontal" 
-                                HorizontalAlignment="Center">
+                            <Grid Margin="0,4,0,0">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                </Grid.ColumnDefinitions>
+
                                 <TextBox 
+                                    Grid.Column="0"
                                     Text="{Binding EngineControl.TargetEngineSpeed, UpdateSourceTrigger=PropertyChanged}"
-                                    Width="100"/>
+                                    Style="{StaticResource MaterialDesignOutlinedTextBox}"
+                                    materialDesign:HintAssist.Hint="Обороты"
+                                    Margin="0,0,8,0"
+                                    Height="Auto"/>
 
                                 <Button 
+                                    Grid.Column="1"
                                     Content="Установить" 
                                     Command="{Binding SetEngineSpeedCommand}"
-                                    Margin="16,0,0,0"/>
-                            </StackPanel>
-                        </Grid>
-                    </GroupBox>
+                                    Style="{StaticResource MaterialDesignOutlinedButton}"/>
+                            </Grid>
+                        </StackPanel>
+                    </materialDesign:Card>
 
-                    <!-- Положение рейки -->
-                    <GroupBox Header="Положение рейки (0.00-30.00)" Margin="0,0,0,16">
-                        <Grid Margin="8">
-                            <Grid.RowDefinitions>
-                                <RowDefinition Height="Auto"/>
-                                <RowDefinition Height="Auto"/>
-                            </Grid.RowDefinitions>
+                    <!-- Rack Position -->
+                    <materialDesign:Card
+                        Background="{DynamicResource MaterialDesignBackground}"
+                        UniformCornerRadius="2"
+                        Margin="0,0,0,8"
+                        Padding="8">
+                        <StackPanel>
+                            <TextBlock 
+                                Text="Положение рейки (0.00-30.00)" 
+                                Style="{StaticResource MaterialDesignSubtitle2TextBlock}"
+                                Margin="0,0,0,6"/>
 
                             <Slider 
-                                Grid.Row="0"
                                 Minimum="0" 
                                 Maximum="30" 
                                 Value="{Binding EngineControl.RackPosition}"
                                 TickFrequency="1"
                                 TickPlacement="BottomRight"
-                                Margin="0,8"/>
+                                Style="{StaticResource MaterialDesignDiscreteSlider}"
+                                Margin="0,4"/>
 
-                            <StackPanel 
-                                Grid.Row="1" 
-                                Orientation="Horizontal" 
-                                HorizontalAlignment="Center">
+                            <Grid Margin="0,4,0,0">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                </Grid.ColumnDefinitions>
+
                                 <TextBox 
+                                    Grid.Column="0"
                                     Text="{Binding EngineControl.RackPosition, StringFormat=N2, UpdateSourceTrigger=PropertyChanged}"
-                                    Width="100"/>
+                                    Style="{StaticResource MaterialDesignOutlinedTextBox}"
+                                    materialDesign:HintAssist.Hint="Положение"
+                                    Margin="0,0,8,0"
+                                    Height="Auto"/>
 
                                 <Button 
+                                    Grid.Column="1"
                                     Content="Установить" 
                                     Command="{Binding SetRackPositionCommand}"
-                                    Margin="16,0,0,0"/>
-                            </StackPanel>
-                        </Grid>
-                    </GroupBox>
-
-                    <!-- Позиция оборудования -->
-                    <GroupBox Header="Позиция оборудования">
-                        <Grid Margin="8">
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="Auto"/>
-                                <ColumnDefinition Width="*"/>
-                                <ColumnDefinition Width="Auto"/>
-                            </Grid.ColumnDefinitions>
-
-                            <TextBlock 
-                                Grid.Column="0" 
-                                Text="Позиция:"
-                                VerticalAlignment="Center"/>
-
-                            <TextBox 
-                                Grid.Column="1"
-                                Text="{Binding EngineControl.EquipmentPosition, UpdateSourceTrigger=PropertyChanged}"
-                                Margin="16,0"
-                                VerticalAlignment="Center"/>
-
-                            <Button 
-                                Grid.Column="2"
-                                Content="Установить" 
-                                Command="{Binding SetEquipmentPositionCommand}"/>
-                        </Grid>
-                    </GroupBox>
+                                    Style="{StaticResource MaterialDesignOutlinedButton}"/>
+                            </Grid>
+                        </StackPanel>
+                    </materialDesign:Card>
                 </StackPanel>
-            </Border>
+            </materialDesign:Card>
 
-            <!-- Правая панель - текущее состояние и кнопки -->
-            <Border 
+            <!-- Right Panel - Status and Quick Actions -->
+            <materialDesign:Card 
                 Grid.Column="1" 
-                BorderBrush="#CCCCCC" 
-                BorderThickness="1" 
-                Margin="8,0,0,0"
-                Padding="16"
-                Background="#F5F5F5"
-                CornerRadius="4">
+                Margin="6,0,0,0"
+                Background="{DynamicResource MaterialDesignCardBackground}"
+                Padding="8"
+                UniformCornerRadius="4">
                 <Grid>
                     <Grid.RowDefinitions>
                         <RowDefinition Height="Auto"/>
@@ -200,184 +219,244 @@
                         <RowDefinition Height="Auto"/>
                     </Grid.RowDefinitions>
 
-                    <!-- Кнопки быстрого доступа -->
-                    <GroupBox Grid.Row="0" Header="Кнопки быстрого доступа" Margin="0,0,0,16">
-                        <Grid Margin="8">
-                            <Grid.RowDefinitions>
-                                <RowDefinition Height="Auto"/>
-                                <RowDefinition Height="Auto"/>
-                                <RowDefinition Height="Auto"/>
-                            </Grid.RowDefinitions>
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="*"/>
-                                <ColumnDefinition Width="*"/>
-                                <ColumnDefinition Width="*"/>
-                                <ColumnDefinition Width="*"/>
-                                <ColumnDefinition Width="*"/>
-                            </Grid.ColumnDefinitions>
+                    <!-- Quick Actions -->
+                    <materialDesign:Card
+                        Grid.Row="0"
+                        Background="{DynamicResource MaterialDesignBackground}"
+                        UniformCornerRadius="2"
+                        Margin="0,0,0,8"
+                        Padding="8">
+                        <StackPanel>
+                            <TextBlock 
+                                Text="Быстрые команды" 
+                                Style="{StaticResource MaterialDesignSubtitle2TextBlock}"
+                                Margin="0,0,0,6"/>
 
-                            <!-- Кнопки быстрого доступа: 1-5 -->
-                            <Button Grid.Row="0" Grid.Column="0" Content="1" Command="{Binding QuickCommandCommand}" CommandParameter="1" Margin="2"/>
-                            <Button Grid.Row="0" Grid.Column="1" Content="2" Command="{Binding QuickCommandCommand}" CommandParameter="2" Margin="2"/>
-                            <Button Grid.Row="0" Grid.Column="2" Content="3" Command="{Binding QuickCommandCommand}" CommandParameter="3" Margin="2"/>
-                            <Button Grid.Row="0" Grid.Column="3" Content="4" Command="{Binding QuickCommandCommand}" CommandParameter="4" Margin="2"/>
-                            <Button Grid.Row="0" Grid.Column="4" Content="5" Command="{Binding QuickCommandCommand}" CommandParameter="5" Margin="2"/>
+                            <UniformGrid Columns="4" Rows="2">
+                                <Button 
+                                    Content="800" 
+                                    Command="{Binding QuickCommandCommand}" 
+                                    CommandParameter="1"
+                                    Style="{StaticResource MaterialDesignFlatButton}"
+                                    Margin="1"
+                                    Padding="4"/>
+                                <Button 
+                                    Content="1000" 
+                                    Command="{Binding QuickCommandCommand}" 
+                                    CommandParameter="2"
+                                    Style="{StaticResource MaterialDesignFlatButton}"
+                                    Margin="1"
+                                    Padding="4"/>
+                                <Button 
+                                    Content="1200" 
+                                    Command="{Binding QuickCommandCommand}" 
+                                    CommandParameter="3"
+                                    Style="{StaticResource MaterialDesignFlatButton}"
+                                    Margin="1"
+                                    Padding="4"/>
+                                <Button 
+                                    Content="1400" 
+                                    Command="{Binding QuickCommandCommand}" 
+                                    CommandParameter="4"
+                                    Style="{StaticResource MaterialDesignFlatButton}"
+                                    Margin="1"
+                                    Padding="4"/>
+                                <Button 
+                                    Content="1600" 
+                                    Command="{Binding QuickCommandCommand}" 
+                                    CommandParameter="5"
+                                    Style="{StaticResource MaterialDesignFlatButton}"
+                                    Margin="1"
+                                    Padding="4"/>
+                                <Button 
+                                    Content="1800" 
+                                    Command="{Binding QuickCommandCommand}" 
+                                    CommandParameter="6"
+                                    Style="{StaticResource MaterialDesignFlatButton}"
+                                    Margin="1"
+                                    Padding="4"/>
+                                <Button 
+                                    Content="2000" 
+                                    Command="{Binding QuickCommandCommand}" 
+                                    CommandParameter="7"
+                                    Style="{StaticResource MaterialDesignFlatButton}"
+                                    Margin="1"
+                                    Padding="4"/>
+                                <Button 
+                                    Content="2200" 
+                                    Command="{Binding QuickCommandCommand}" 
+                                    CommandParameter="8"
+                                    Style="{StaticResource MaterialDesignFlatButton}"
+                                    Margin="1"
+                                    Padding="4"/>
+                            </UniformGrid>
+                        </StackPanel>
+                    </materialDesign:Card>
 
-                            <!-- Кнопки быстрого доступа: 6-10 -->
-                            <Button Grid.Row="1" Grid.Column="0" Content="6" Command="{Binding QuickCommandCommand}" CommandParameter="6" Margin="2"/>
-                            <Button Grid.Row="1" Grid.Column="1" Content="7" Command="{Binding QuickCommandCommand}" CommandParameter="7" Margin="2"/>
-                            <Button Grid.Row="1" Grid.Column="2" Content="8" Command="{Binding QuickCommandCommand}" CommandParameter="8" Margin="2"/>
-                            <Button Grid.Row="1" Grid.Column="3" Content="9" Command="{Binding QuickCommandCommand}" CommandParameter="9" Margin="2"/>
-                            <Button Grid.Row="1" Grid.Column="4" Content="10" Command="{Binding QuickCommandCommand}" CommandParameter="10" Margin="2"/>
+                    <!-- Current Status -->
+                    <materialDesign:Card
+                        Grid.Row="1"
+                        Background="{DynamicResource MaterialDesignBackground}"
+                        UniformCornerRadius="2"
+                        Margin="0,0,0,8"
+                        Padding="8">
+                        <StackPanel>
+                            <TextBlock 
+                                Text="Состояние двигателя" 
+                                Style="{StaticResource MaterialDesignSubtitle2TextBlock}"
+                                Margin="0,0,0,8"/>
 
-                            <!-- Кнопки быстрого доступа: 11-15 -->
-                            <Button Grid.Row="2" Grid.Column="0" Content="11" Command="{Binding QuickCommandCommand}" CommandParameter="11" Margin="2"/>
-                            <Button Grid.Row="2" Grid.Column="1" Content="12" Command="{Binding QuickCommandCommand}" CommandParameter="12" Margin="2"/>
-                            <Button Grid.Row="2" Grid.Column="2" Content="13" Command="{Binding QuickCommandCommand}" CommandParameter="13" Margin="2"/>
-                            <Button Grid.Row="2" Grid.Column="3" Content="14" Command="{Binding QuickCommandCommand}" CommandParameter="14" Margin="2"/>
-                            <Button Grid.Row="2" Grid.Column="4" Content="15" Command="{Binding QuickCommandCommand}" CommandParameter="15" Margin="2"/>
-                        </Grid>
-                    </GroupBox>
-
-                    <!-- Текущее состояние -->
-                    <GroupBox Grid.Row="1" Header="Текущее состояние двигателя" Margin="0,0,0,16">
-                        <StackPanel Margin="8">
-                            <!-- Обороты двигателя -->
-                            <Grid Margin="0,4">
+                            <!-- Engine Speed -->
+                            <Grid Margin="0,2,0,4">
                                 <Grid.ColumnDefinitions>
                                     <ColumnDefinition Width="*"/>
                                     <ColumnDefinition Width="Auto"/>
                                 </Grid.ColumnDefinitions>
 
                                 <TextBlock 
-                                    Grid.Column="0" 
+                                    Grid.Column="0"
                                     Text="Обороты двигателя:" 
+                                    Style="{StaticResource MaterialDesignBody2TextBlock}"
                                     VerticalAlignment="Center"/>
 
                                 <TextBlock 
-                                    Grid.Column="1" 
+                                    Grid.Column="1"
                                     Text="{Binding CurrentEngineSpeed, StringFormat='{}{0:N0} об/мин'}" 
-                                    FontWeight="Bold"
-                                    VerticalAlignment="Center"/>
+                                    Style="{StaticResource MaterialDesignSubtitle1TextBlock}"
+                                    Foreground="{DynamicResource PrimaryHueMidBrush}"/>
                             </Grid>
 
-                            <!-- Разделитель -->
-                            <Separator Margin="0,4"/>
+                            <Separator Style="{StaticResource MaterialDesignLightSeparator}" Margin="0,2"/>
 
-                            <!-- Режим работы -->
-                            <Grid Margin="0,4">
+                            <!-- Engine Mode -->
+                            <Grid Margin="0,4,0,4">
                                 <Grid.ColumnDefinitions>
                                     <ColumnDefinition Width="*"/>
                                     <ColumnDefinition Width="Auto"/>
                                 </Grid.ColumnDefinitions>
 
                                 <TextBlock 
-                                    Grid.Column="0" 
+                                    Grid.Column="0"
                                     Text="Режим работы:" 
+                                    Style="{StaticResource MaterialDesignBody2TextBlock}"
                                     VerticalAlignment="Center"/>
 
                                 <TextBlock 
-                                    Grid.Column="1" 
+                                    Grid.Column="1"
                                     Text="{Binding CurrentEngineMode}" 
-                                    FontWeight="Bold"
-                                    VerticalAlignment="Center"/>
+                                    Style="{StaticResource MaterialDesignSubtitle1TextBlock}"
+                                    Foreground="{DynamicResource SecondaryHueMidBrush}"/>
                             </Grid>
 
-                            <!-- Разделитель -->
-                            <Separator Margin="0,4"/>
+                            <Separator Style="{StaticResource MaterialDesignLightSeparator}" Margin="0,2"/>
 
-                            <!-- Тип нагрузки -->
-                            <Grid Margin="0,4">
+                            <!-- Load Type -->
+                            <Grid Margin="0,4,0,4">
                                 <Grid.ColumnDefinitions>
                                     <ColumnDefinition Width="*"/>
                                     <ColumnDefinition Width="Auto"/>
                                 </Grid.ColumnDefinitions>
 
                                 <TextBlock 
-                                    Grid.Column="0" 
+                                    Grid.Column="0"
                                     Text="Тип нагрузки:" 
+                                    Style="{StaticResource MaterialDesignBody2TextBlock}"
                                     VerticalAlignment="Center"/>
 
                                 <TextBlock 
-                                    Grid.Column="1" 
+                                    Grid.Column="1"
                                     Text="{Binding CurrentLoadType}" 
-                                    FontWeight="Bold"
-                                    VerticalAlignment="Center"/>
+                                    Style="{StaticResource MaterialDesignSubtitle1TextBlock}"
+                                    Foreground="{DynamicResource SecondaryHueMidBrush}"/>
                             </Grid>
 
-                            <!-- Разделитель -->
-                            <Separator Margin="0,4"/>
+                            <Separator Style="{StaticResource MaterialDesignLightSeparator}" Margin="0,2"/>
 
-                            <!-- Положение рейки -->
-                            <Grid Margin="0,4">
+                            <!-- Rack Position -->
+                            <Grid Margin="0,4,0,4">
                                 <Grid.ColumnDefinitions>
                                     <ColumnDefinition Width="*"/>
                                     <ColumnDefinition Width="Auto"/>
                                 </Grid.ColumnDefinitions>
 
                                 <TextBlock 
-                                    Grid.Column="0" 
+                                    Grid.Column="0"
                                     Text="Положение рейки:" 
+                                    Style="{StaticResource MaterialDesignBody2TextBlock}"
                                     VerticalAlignment="Center"/>
 
                                 <TextBlock 
-                                    Grid.Column="1" 
+                                    Grid.Column="1"
                                     Text="{Binding CurrentRackPosition, StringFormat='{}{0:N2}'}" 
-                                    FontWeight="Bold"
-                                    VerticalAlignment="Center"/>
+                                    Style="{StaticResource MaterialDesignSubtitle1TextBlock}"
+                                    Foreground="{DynamicResource PrimaryHueMidBrush}"/>
                             </Grid>
 
-                            <!-- Статус защиты -->
-                            <Grid Margin="0,8">
+                            <Separator Style="{StaticResource MaterialDesignLightSeparator}" Margin="0,2"/>
+
+                            <!-- Protection Status -->
+                            <Grid Margin="0,4,0,0">
                                 <Grid.ColumnDefinitions>
                                     <ColumnDefinition Width="*"/>
                                     <ColumnDefinition Width="Auto"/>
                                 </Grid.ColumnDefinitions>
 
                                 <TextBlock 
-                                    Grid.Column="0" 
-                                    Text="Статус защиты двигателя:" 
+                                    Grid.Column="0"
+                                    Text="Статус защиты:" 
+                                    Style="{StaticResource MaterialDesignBody2TextBlock}"
                                     VerticalAlignment="Center"/>
 
                                 <StackPanel Grid.Column="1" Orientation="Horizontal">
-                                    <Border
-                                        Width="16" 
-                                        Height="16" 
-                                        Background="{Binding ProtectionStatusColor}" 
-                                        Margin="0,0,8,0"
-                                        CornerRadius="8"
+                                    <Ellipse
+                                        Width="12" 
+                                        Height="12" 
+                                        Fill="{Binding ProtectionStatusColor}" 
+                                        Margin="0,0,4,0"
                                         VerticalAlignment="Center"/>
 
                                     <TextBlock 
                                         Text="{Binding ProtectionStatus}" 
-                                        FontWeight="Bold"
+                                        Style="{StaticResource MaterialDesignSubtitle1TextBlock}"
                                         VerticalAlignment="Center"/>
                                 </StackPanel>
                             </Grid>
                         </StackPanel>
-                    </GroupBox>
+                    </materialDesign:Card>
 
-                    <!-- Кнопки управления -->
-                    <StackPanel Grid.Row="2" Orientation="Horizontal" HorizontalAlignment="Center">
+                    <!-- Main Control Buttons -->
+                    <Grid Grid.Row="2">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="*"/>
+                        </Grid.ColumnDefinitions>
+
                         <Button 
+                            Grid.Column="0"
                             Content="ПУСК" 
                             Command="{Binding StartEngineCommand}"
-                            Margin="0,0,16,0"
-                            Background="Green"
+                            Style="{StaticResource MaterialDesignRaisedButton}"
+                            materialDesign:ButtonAssist.CornerRadius="2"
                             Foreground="White"
-                            Width="120"
-                            Height="40"/>
+                            Background="ForestGreen"
+                            BorderBrush="ForestGreen"
+                            Height="40"
+                            Margin="0,0,4,0"/>
 
                         <Button 
+                            Grid.Column="1"
                             Content="ОСТАНОВ" 
                             Command="{Binding StopEngineCommand}"
-                            Background="Red"
+                            Style="{StaticResource MaterialDesignRaisedButton}"
+                            materialDesign:ButtonAssist.CornerRadius="2"
                             Foreground="White"
-                            Width="120"
-                            Height="40"/>
-                    </StackPanel>
+                            Background="Crimson"
+                            BorderBrush="Crimson"
+                            Height="40"
+                            Margin="4,0,0,0"/>
+                    </Grid>
                 </Grid>
-            </Border>
+            </materialDesign:Card>
         </Grid>
     </Grid>
 </UserControl>

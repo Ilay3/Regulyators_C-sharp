@@ -151,48 +151,56 @@ namespace Regulyators.UI.ViewModels
             // Модель представления для расширенных графиков
             var improvedChartViewModel = new ImprovedChartViewModel();
 
-            // Инициализация меню
+            // Инициализация меню с обновленными иконками
             MenuItems = new ObservableCollection<MenuItem>
             {
                 new MenuItem
                 {
                     Title = "Параметры двигателя",
-                    ViewModel = engineParamsViewModel
+                    ViewModel = engineParamsViewModel,
+                    IconKind = "ChartLineVariant"
                 },
                 new MenuItem
                 {
                     Title = "Аналоговые индикаторы",
-                    ViewModel = gaugePanelViewModel
+                    ViewModel = gaugePanelViewModel,
+                    IconKind = "GaugeHigh"
                 },
                 new MenuItem
                 {
                     Title = "Расширенные графики",
-                    ViewModel = improvedChartViewModel
+                    ViewModel = improvedChartViewModel,
+                    IconKind = "ChartMultiline"
                 },
                 new MenuItem
                 {
                     Title = "Управление двигателем",
-                    ViewModel = controlViewModel
+                    ViewModel = controlViewModel,
+                    IconKind = "EngineOutline"
                 },
                 new MenuItem
                 {
                     Title = "Система защиты",
-                    ViewModel = protectionViewModel
+                    ViewModel = protectionViewModel,
+                    IconKind = "ShieldAlert"
                 },
                 new MenuItem
                 {
                     Title = "Журнал событий",
-                    ViewModel = loggingViewModel
+                    ViewModel = loggingViewModel,
+                    IconKind = "ClipboardTextClock"
                 },
                 new MenuItem
                 {
                     Title = "Настройки системы",
-                    ViewModel = settingsViewModel
+                    ViewModel = settingsViewModel,
+                    IconKind = "Cog"
                 },
                 new MenuItem
                 {
                     Title = "Режим симуляции",
-                    ViewModel = simulationViewModel
+                    ViewModel = simulationViewModel,
+                    IconKind = "TestTube"
                 }
             };
 

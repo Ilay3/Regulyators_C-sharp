@@ -5,22 +5,24 @@
     xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006" 
     xmlns:d="http://schemas.microsoft.com/expression/blend/2008" 
     xmlns:local="clr-namespace:Regulyators.UI.Views"
+    xmlns:materialDesign="http://materialdesigninxaml.net/winfx/xaml/themes"
     xmlns:converters="clr-namespace:Regulyators.UI.Converters"
     mc:Ignorable="d" 
-    d:DesignHeight="600" d:DesignWidth="800">
+    d:DesignHeight="850" d:DesignWidth="1360"
+    Background="{DynamicResource MaterialDesignPaper}">
 
     <UserControl.Resources>
         <converters:BooleanToBrushConverterExt x:Key="BooleanToBrushExt"/>
     </UserControl.Resources>
 
-    <Grid Margin="16">
+    <Grid Margin="12">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto"/>
             <RowDefinition Height="*"/>
             <RowDefinition Height="Auto"/>
         </Grid.RowDefinitions>
 
-        <!-- Заголовок -->
+        <!-- Header -->
         <Grid Grid.Row="0" Margin="0,0,0,8">
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="Auto"/>
@@ -28,130 +30,150 @@
                 <ColumnDefinition Width="Auto"/>
             </Grid.ColumnDefinitions>
 
-            <!-- Заголовок -->
-            <TextBlock 
-                Grid.Column="0"
-                Text="График параметров двигателя" 
-                FontSize="18" 
-                FontWeight="Bold"/>
+            <!-- Title -->
+            <StackPanel Grid.Column="0" Orientation="Vertical">
+                <TextBlock 
+                    Text="ГРАФИК ПАРАМЕТРОВ ДВИГАТЕЛЯ" 
+                    Style="{StaticResource MaterialDesignHeadline6TextBlock}"
+                    Foreground="{DynamicResource PrimaryHueMidBrush}"
+                    Margin="0,0,0,2"/>
+                <TextBlock 
+                    Text="Расширенная визуализация и анализ данных"
+                    Style="{StaticResource MaterialDesignBody2TextBlock}"
+                    Opacity="0.6"/>
+            </StackPanel>
 
-            <!-- Статус -->
+            <!-- Status Text -->
             <TextBlock 
                 Grid.Column="1"
                 Text="{Binding StatusMessage}" 
+                Style="{StaticResource MaterialDesignBody2TextBlock}"
                 Foreground="#555"
                 VerticalAlignment="Center"
                 Margin="16,0,0,0"/>
 
-            <!-- Индикатор соединения -->
+            <!-- Connection Status -->
             <StackPanel 
                 Grid.Column="2"
                 Orientation="Horizontal">
                 <TextBlock 
                     Text="Соединение: " 
+                    Style="{StaticResource MaterialDesignBody2TextBlock}"
                     VerticalAlignment="Center"/>
                 <Ellipse 
-                    Width="16" 
-                    Height="16" 
+                    Width="12" 
+                    Height="12" 
                     Fill="{Binding IsConnected, Converter={StaticResource BooleanToBrushExt}, ConverterParameter='Green;Red'}" 
                     VerticalAlignment="Center"
                     Margin="4,0,0,0"/>
             </StackPanel>
         </Grid>
 
-        <!-- Основной график -->
-        <Border 
+        <!-- Chart Area -->
+        <materialDesign:Card 
             Grid.Row="1"
-            BorderBrush="#CCCCCC" 
-            BorderThickness="1"
-            Background="#F5F5F5"
-            CornerRadius="4">
+            Background="{DynamicResource MaterialDesignCardBackground}"
+            UniformCornerRadius="4"
+            Padding="8">
+            <!-- WpfPlot control taking all available space -->
+            <WpfPlot 
+                x:Name="MainPlot"/>
+        </materialDesign:Card>
+
+        <!-- Controls Panel -->
+        <materialDesign:Card 
+            Grid.Row="2"
+            Background="{DynamicResource MaterialDesignCardBackground}"
+            UniformCornerRadius="4"
+            Padding="8"
+            Margin="0,8,0,0">
             <Grid>
-                <!-- WpfPlot контрол на весь доступный размер -->
-                <WpfPlot 
-                    x:Name="MainPlot"
-                    Margin="8"/>
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="Auto"/>
+                </Grid.RowDefinitions>
+
+                <!-- Series Visibility -->
+                <WrapPanel Grid.Row="0" Orientation="Horizontal" HorizontalAlignment="Left">
+                    <CheckBox 
+                        Content="Обороты двигателя" 
+                        IsChecked="{Binding ShowEngineSpeed}"
+                        Style="{StaticResource MaterialDesignCheckBox}"
+                        Margin="0,0,8,0"/>
+                    <CheckBox 
+                        Content="Обороты турбины" 
+                        IsChecked="{Binding ShowTurboSpeed}"
+                        Style="{StaticResource MaterialDesignCheckBox}"
+                        Margin="0,0,8,0"/>
+                    <CheckBox 
+                        Content="Давление масла" 
+                        IsChecked="{Binding ShowOilPressure}"
+                        Style="{StaticResource MaterialDesignCheckBox}"
+                        Margin="0,0,8,0"/>
+                    <CheckBox 
+                        Content="Давление наддува" 
+                        IsChecked="{Binding ShowBoostPressure}"
+                        Style="{StaticResource MaterialDesignCheckBox}"
+                        Margin="0,0,8,0"/>
+                    <CheckBox 
+                        Content="Температура масла" 
+                        IsChecked="{Binding ShowOilTemperature}"
+                        Style="{StaticResource MaterialDesignCheckBox}"/>
+                </WrapPanel>
+
+                <!-- Time Interval and Buttons -->
+                <DockPanel Grid.Row="1" LastChildFill="False" Margin="0,8,0,0">
+                    <!-- Time Interval Selector -->
+                    <StackPanel DockPanel.Dock="Left" Orientation="Horizontal">
+                        <TextBlock 
+                            Text="Интервал:" 
+                            Style="{StaticResource MaterialDesignBody2TextBlock}"
+                            VerticalAlignment="Center"
+                            Margin="0,0,8,0"/>
+                        <ComboBox 
+                            ItemsSource="{Binding TimeIntervals}"
+                            SelectedItem="{Binding SelectedTimeInterval}"
+                            Style="{StaticResource MaterialDesignOutlinedComboBox}"
+                            materialDesign:HintAssist.Hint="Интервал"
+                            Width="80"
+                            Margin="0,0,16,0"/>
+
+                        <!-- Autoscroll -->
+                        <CheckBox 
+                            Content="Автопрокрутка" 
+                            IsChecked="{Binding AutoScroll}"
+                            Style="{StaticResource MaterialDesignCheckBox}"
+                            Margin="0,0,16,0"
+                            VerticalAlignment="Center"/>
+                    </StackPanel>
+
+                    <!-- Action Buttons -->
+                    <StackPanel DockPanel.Dock="Right" Orientation="Horizontal">
+                        <Button 
+                            Content="Автомасштаб" 
+                            Command="{Binding AutoScaleCommand}"
+                            Style="{StaticResource MaterialDesignOutlinedButton}"
+                            Margin="0,0,8,0"/>
+                        <Button 
+                            Content="Очистить" 
+                            Command="{Binding ClearGraphCommand}"
+                            Style="{StaticResource MaterialDesignOutlinedButton}"
+                            Margin="0,0,8,0"/>
+                        <Button 
+                            Content="Экспорт графика" 
+                            Command="{Binding ExportImageCommand}"
+                            Style="{StaticResource MaterialDesignOutlinedButton}"
+                            Margin="0,0,8,0"/>
+                        <Button 
+                            Content="Экспорт в Excel" 
+                            Command="{Binding ExportExcelCommand}"
+                            Style="{StaticResource MaterialDesignRaisedButton}"
+                            materialDesign:ButtonAssist.CornerRadius="2"
+                            Background="{DynamicResource PrimaryHueMidBrush}"
+                            Foreground="{DynamicResource PrimaryHueMidForegroundBrush}"/>
+                    </StackPanel>
+                </DockPanel>
             </Grid>
-        </Border>
-
-        <!-- Панель управления графиком -->
-        <Grid Grid.Row="2" Margin="0,8,0,0">
-            <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="*"/>
-                <ColumnDefinition Width="Auto"/>
-            </Grid.ColumnDefinitions>
-
-            <!-- Левая часть - управление отображением серий -->
-            <StackPanel 
-                Grid.Column="0" 
-                Orientation="Horizontal" 
-                HorizontalAlignment="Left">
-                <CheckBox 
-                    Content="Обороты двигателя" 
-                    IsChecked="{Binding ShowEngineSpeed}"
-                    Margin="0,0,12,0"/>
-                <CheckBox 
-                    Content="Обороты турбины" 
-                    IsChecked="{Binding ShowTurboSpeed}"
-                    Margin="0,0,12,0"/>
-                <CheckBox 
-                    Content="Давление масла" 
-                    IsChecked="{Binding ShowOilPressure}"
-                    Margin="0,0,12,0"/>
-                <CheckBox 
-                    Content="Давление наддува" 
-                    IsChecked="{Binding ShowBoostPressure}"
-                    Margin="0,0,12,0"/>
-                <CheckBox 
-                    Content="Температура масла" 
-                    IsChecked="{Binding ShowOilTemperature}"/>
-            </StackPanel>
-
-            <!-- Правая часть - временной интервал и кнопки -->
-            <StackPanel 
-                Grid.Column="1" 
-                Orientation="Horizontal" 
-                HorizontalAlignment="Right">
-
-                <!-- Выбор временного интервала -->
-                <TextBlock 
-                    Text="Интервал:" 
-                    VerticalAlignment="Center"
-                    Margin="0,0,8,0"/>
-                <ComboBox 
-                    ItemsSource="{Binding TimeIntervals}"
-                    SelectedItem="{Binding SelectedTimeInterval}"
-                    Width="80"
-                    Margin="0,0,16,0"/>
-
-                <!-- Автопрокрутка -->
-                <CheckBox 
-                    Content="Автопрокрутка" 
-                    IsChecked="{Binding AutoScroll}"
-                    Margin="0,0,16,0"
-                    VerticalAlignment="Center"/>
-
-                <!-- Кнопки управления -->
-                <Button 
-                    Content="Автомасштаб" 
-                    Command="{Binding AutoScaleCommand}"
-                    Margin="0,0,8,0"
-                    Padding="8,4"/>
-                <Button 
-                    Content="Очистить" 
-                    Command="{Binding ClearGraphCommand}"
-                    Margin="0,0,8,0"
-                    Padding="8,4"/>
-                <Button 
-                    Content="Экспорт графика" 
-                    Command="{Binding ExportImageCommand}"
-                    Margin="0,0,8,0"
-                    Padding="8,4"/>
-                <Button 
-                    Content="Экспорт в Excel" 
-                    Command="{Binding ExportExcelCommand}"
-                    Padding="8,4"/>
-            </StackPanel>
-        </Grid>
+        </materialDesign:Card>
     </Grid>
 </UserControl>

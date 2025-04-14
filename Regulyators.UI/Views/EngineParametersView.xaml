@@ -5,318 +5,468 @@
     xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006" 
     xmlns:d="http://schemas.microsoft.com/expression/blend/2008" 
     xmlns:local="clr-namespace:Regulyators.UI.Views"
+    xmlns:materialDesign="http://materialdesigninxaml.net/winfx/xaml/themes"
     mc:Ignorable="d" 
-    d:DesignHeight="600" d:DesignWidth="800">
+    d:DesignHeight="850" d:DesignWidth="1360"
+    Background="{DynamicResource MaterialDesignPaper}">
 
-    <Grid Margin="16">
+    <Grid Margin="12">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto"/>
             <RowDefinition Height="*"/>
         </Grid.RowDefinitions>
 
-        <!-- Заголовок -->
-        <TextBlock 
-            Grid.Row="0"
-            Text="Параметры двигателя" 
-            FontSize="18" 
-            FontWeight="Bold" 
-            Margin="0,0,0,16"/>
+        <!-- Header -->
+        <StackPanel Grid.Row="0" Margin="0,0,0,8">
+            <TextBlock 
+                Text="ПАРАМЕТРЫ ДВИГАТЕЛЯ" 
+                Style="{StaticResource MaterialDesignHeadline6TextBlock}"
+                Foreground="{DynamicResource PrimaryHueMidBrush}"
+                Margin="0,0,0,2"/>
+            <TextBlock 
+                Text="Мониторинг и контроль рабочих параметров двигателя"
+                Style="{StaticResource MaterialDesignBody2TextBlock}"
+                Opacity="0.6"/>
+        </StackPanel>
 
-        <!-- Основное содержимое -->
+        <!-- Main Content -->
         <Grid Grid.Row="1">
             <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="*" />
-                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="0.35*" />
+                <ColumnDefinition Width="0.65*" />
             </Grid.ColumnDefinitions>
 
-            <!-- Левая панель - параметры двигателя -->
-            <Border 
+            <!-- Left Panel - Parameters Display -->
+            <materialDesign:Card 
                 Grid.Column="0" 
-                BorderBrush="#CCCCCC" 
-                BorderThickness="1" 
-                Margin="0,0,8,0"
-                Padding="16"
-                Background="#F5F5F5"
-                CornerRadius="4">
+                Margin="0,0,6,0"
+                Background="{DynamicResource MaterialDesignCardBackground}"
+                Padding="8"
+                UniformCornerRadius="4">
                 <StackPanel>
                     <TextBlock 
                         Text="Текущие параметры" 
-                        FontSize="16" 
-                        FontWeight="SemiBold" 
-                        Margin="0,0,0,16"/>
+                        Style="{StaticResource MaterialDesignSubtitle2TextBlock}"
+                        Margin="0,0,0,8"/>
 
-                    <!-- Обороты двигателя -->
-                    <Grid Margin="0,8">
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="*"/>
-                            <ColumnDefinition Width="Auto"/>
-                        </Grid.ColumnDefinitions>
+                    <!-- Engine Speed -->
+                    <materialDesign:Card
+                        Background="{DynamicResource MaterialDesignBackground}"
+                        UniformCornerRadius="2"
+                        Margin="0,0,0,6"
+                        Padding="8">
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
 
-                        <TextBlock 
-                            Grid.Column="0" 
-                            Text="Обороты двигателя:"
-                            VerticalAlignment="Center"/>
+                            <StackPanel Grid.Column="0">
+                                <TextBlock 
+                                    Text="Обороты двигателя" 
+                                    Style="{StaticResource MaterialDesignBody2TextBlock}"
+                                    Opacity="0.7"/>
+                                <TextBlock 
+                                    Text="{Binding EngineParameters.EngineSpeed, StringFormat='{}{0:N0}'}" 
+                                    Style="{StaticResource MaterialDesignHeadline6TextBlock}"
+                                    Foreground="{Binding EngineSpeedCriticalColor}"/>
+                            </StackPanel>
 
-                        <TextBlock 
-                            Grid.Column="1" 
-                            Text="{Binding EngineParameters.EngineSpeed, StringFormat='{}{0:N0} об/мин'}"
-                            FontWeight="Bold"
-                            VerticalAlignment="Center"/>
-                    </Grid>
+                            <TextBlock 
+                                Grid.Column="1"
+                                Text="об/мин" 
+                                Style="{StaticResource MaterialDesignBody2TextBlock}"
+                                VerticalAlignment="Bottom"
+                                Margin="0,0,0,2"
+                                Opacity="0.7"/>
+                        </Grid>
+                    </materialDesign:Card>
 
-                    <!-- Разделитель -->
-                    <Separator Margin="0,4"/>
+                    <!-- Turbo Speed -->
+                    <materialDesign:Card
+                        Background="{DynamicResource MaterialDesignBackground}"
+                        UniformCornerRadius="2"
+                        Margin="0,0,0,6"
+                        Padding="8">
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
 
-                    <!-- Обороты турбокомпрессора -->
-                    <Grid Margin="0,8">
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="*"/>
-                            <ColumnDefinition Width="Auto"/>
-                        </Grid.ColumnDefinitions>
+                            <StackPanel Grid.Column="0">
+                                <TextBlock 
+                                    Text="Обороты турбокомпрессора" 
+                                    Style="{StaticResource MaterialDesignBody2TextBlock}"
+                                    Opacity="0.7"/>
+                                <TextBlock 
+                                    Text="{Binding EngineParameters.TurboCompressorSpeed, StringFormat='{}{0:N0}'}" 
+                                    Style="{StaticResource MaterialDesignHeadline6TextBlock}"/>
+                            </StackPanel>
 
-                        <TextBlock 
-                            Grid.Column="0" 
-                            Text="Обороты турбокомпрессора:"
-                            VerticalAlignment="Center"/>
+                            <TextBlock 
+                                Grid.Column="1"
+                                Text="об/мин" 
+                                Style="{StaticResource MaterialDesignBody2TextBlock}"
+                                VerticalAlignment="Bottom"
+                                Margin="0,0,0,2"
+                                Opacity="0.7"/>
+                        </Grid>
+                    </materialDesign:Card>
 
-                        <TextBlock 
-                            Grid.Column="1" 
-                            Text="{Binding EngineParameters.TurboCompressorSpeed, StringFormat='{}{0:N0} об/мин'}"
-                            FontWeight="Bold"
-                            VerticalAlignment="Center"/>
-                    </Grid>
+                    <!-- Oil Pressure -->
+                    <materialDesign:Card
+                        Background="{DynamicResource MaterialDesignBackground}"
+                        UniformCornerRadius="2"
+                        Margin="0,0,0,6"
+                        Padding="8">
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
 
-                    <!-- Разделитель -->
-                    <Separator Margin="0,4"/>
+                            <StackPanel Grid.Column="0">
+                                <TextBlock 
+                                    Text="Давление масла" 
+                                    Style="{StaticResource MaterialDesignBody2TextBlock}"
+                                    Opacity="0.7"/>
+                                <TextBlock 
+                                    Text="{Binding EngineParameters.OilPressure, StringFormat='{}{0:N2}'}" 
+                                    Style="{StaticResource MaterialDesignHeadline6TextBlock}"
+                                    Foreground="{Binding OilPressureColor}"/>
+                            </StackPanel>
 
-                    <!-- Давление масла -->
-                    <Grid Margin="0,8">
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="*"/>
-                            <ColumnDefinition Width="Auto"/>
-                        </Grid.ColumnDefinitions>
+                            <TextBlock 
+                                Grid.Column="1"
+                                Text="кг/см²" 
+                                Style="{StaticResource MaterialDesignBody2TextBlock}"
+                                VerticalAlignment="Bottom"
+                                Margin="0,0,0,2"
+                                Opacity="0.7"/>
+                        </Grid>
+                    </materialDesign:Card>
 
-                        <TextBlock 
-                            Grid.Column="0" 
-                            Text="Давление масла:"
-                            VerticalAlignment="Center"/>
+                    <!-- Boost Pressure -->
+                    <materialDesign:Card
+                        Background="{DynamicResource MaterialDesignBackground}"
+                        UniformCornerRadius="2"
+                        Margin="0,0,0,6"
+                        Padding="8">
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
 
-                        <TextBlock 
-                            Grid.Column="1" 
-                            Text="{Binding EngineParameters.OilPressure, StringFormat='{}{0:N2} кг/см²'}"
-                            FontWeight="Bold"
-                            VerticalAlignment="Center"
-                            Foreground="{Binding OilPressureColor}"/>
-                    </Grid>
+                            <StackPanel Grid.Column="0">
+                                <TextBlock 
+                                    Text="Давление наддува" 
+                                    Style="{StaticResource MaterialDesignBody2TextBlock}"
+                                    Opacity="0.7"/>
+                                <TextBlock 
+                                    Text="{Binding EngineParameters.BoostPressure, StringFormat='{}{0:N2}'}" 
+                                    Style="{StaticResource MaterialDesignHeadline6TextBlock}"
+                                    Foreground="{Binding BoostPressureColor}"/>
+                            </StackPanel>
 
-                    <!-- Разделитель -->
-                    <Separator Margin="0,4"/>
+                            <TextBlock 
+                                Grid.Column="1"
+                                Text="кг/см²" 
+                                Style="{StaticResource MaterialDesignBody2TextBlock}"
+                                VerticalAlignment="Bottom"
+                                Margin="0,0,0,2"
+                                Opacity="0.7"/>
+                        </Grid>
+                    </materialDesign:Card>
 
-                    <!-- Давление наддува -->
-                    <Grid Margin="0,8">
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="*"/>
-                            <ColumnDefinition Width="Auto"/>
-                        </Grid.ColumnDefinitions>
+                    <!-- Oil Temperature -->
+                    <materialDesign:Card
+                        Background="{DynamicResource MaterialDesignBackground}"
+                        UniformCornerRadius="2"
+                        Margin="0,0,0,6"
+                        Padding="8">
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
 
-                        <TextBlock 
-                            Grid.Column="0" 
-                            Text="Давление наддува:"
-                            VerticalAlignment="Center"/>
+                            <StackPanel Grid.Column="0">
+                                <TextBlock 
+                                    Text="Температура масла" 
+                                    Style="{StaticResource MaterialDesignBody2TextBlock}"
+                                    Opacity="0.7"/>
+                                <TextBlock 
+                                    Text="{Binding EngineParameters.OilTemperature, StringFormat='{}{0:N1}'}" 
+                                    Style="{StaticResource MaterialDesignHeadline6TextBlock}"
+                                    Foreground="{Binding OilTemperatureColor}"/>
+                            </StackPanel>
 
-                        <TextBlock 
-                            Grid.Column="1" 
-                            Text="{Binding EngineParameters.BoostPressure, StringFormat='{}{0:N2} кг/см²'}"
-                            FontWeight="Bold"
-                            VerticalAlignment="Center"
-                            Foreground="{Binding BoostPressureColor}"/>
-                    </Grid>
+                            <TextBlock 
+                                Grid.Column="1"
+                                Text="°C" 
+                                Style="{StaticResource MaterialDesignBody2TextBlock}"
+                                VerticalAlignment="Bottom"
+                                Margin="0,0,0,2"
+                                Opacity="0.7"/>
+                        </Grid>
+                    </materialDesign:Card>
 
-                    <!-- Разделитель -->
-                    <Separator Margin="0,4"/>
+                    <!-- Rack Position -->
+                    <materialDesign:Card
+                        Background="{DynamicResource MaterialDesignBackground}"
+                        UniformCornerRadius="2"
+                        Margin="0,0,0,0"
+                        Padding="8">
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
 
-                    <!-- Температура масла -->
-                    <Grid Margin="0,8">
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="*"/>
-                            <ColumnDefinition Width="Auto"/>
-                        </Grid.ColumnDefinitions>
-
-                        <TextBlock 
-                            Grid.Column="0" 
-                            Text="Температура масла:"
-                            VerticalAlignment="Center"/>
-
-                        <TextBlock 
-                            Grid.Column="1" 
-                            Text="{Binding EngineParameters.OilTemperature, StringFormat='{}{0:N1} °C'}"
-                            FontWeight="Bold"
-                            VerticalAlignment="Center"
-                            Foreground="{Binding OilTemperatureColor}"/>
-                    </Grid>
-
-                    <!-- Разделитель -->
-                    <Separator Margin="0,4"/>
-
-                    <!-- Положение рейки -->
-                    <Grid Margin="0,8">
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="*"/>
-                            <ColumnDefinition Width="Auto"/>
-                        </Grid.ColumnDefinitions>
-
-                        <TextBlock 
-                            Grid.Column="0" 
-                            Text="Положение рейки:"
-                            VerticalAlignment="Center"/>
-
-                        <TextBlock 
-                            Grid.Column="1" 
-                            Text="{Binding EngineParameters.RackPosition, StringFormat='{}{0:D} (код)'}"
-                            FontWeight="Bold"
-                            VerticalAlignment="Center"/>
-                    </Grid>
+                            <StackPanel Grid.Column="0">
+                                <TextBlock 
+                                    Text="Положение рейки" 
+                                    Style="{StaticResource MaterialDesignBody2TextBlock}"
+                                    Opacity="0.7"/>
+                                <TextBlock 
+                                    Text="{Binding EngineParameters.RackPosition, StringFormat='{}{0:N2}'}" 
+                                    Style="{StaticResource MaterialDesignHeadline6TextBlock}"/>
+                            </StackPanel>
+                        </Grid>
+                    </materialDesign:Card>
                 </StackPanel>
-            </Border>
+            </materialDesign:Card>
 
-            <!-- Правая панель - системы защиты и график -->
-            <Grid Grid.Column="1" Margin="8,0,0,0">
+            <!-- Right Panel - Protection and Graph -->
+            <Grid Grid.Column="1" Margin="6,0,0,0">
                 <Grid.RowDefinitions>
                     <RowDefinition Height="Auto"/>
                     <RowDefinition Height="*"/>
                 </Grid.RowDefinitions>
 
-                <!-- Системы защиты -->
-                <Border 
+                <!-- Protection Systems -->
+                <materialDesign:Card 
                     Grid.Row="0"
-                    BorderBrush="#CCCCCC" 
-                    BorderThickness="1" 
-                    Padding="16"
-                    Background="#F5F5F5"
-                    CornerRadius="4"
-                    Margin="0,0,0,16">
+                    Margin="0,0,0,6"
+                    Background="{DynamicResource MaterialDesignCardBackground}"
+                    Padding="8"
+                    UniformCornerRadius="4">
                     <StackPanel>
                         <TextBlock 
                             Text="Системы защиты" 
-                            FontSize="16" 
-                            FontWeight="SemiBold" 
-                            Margin="0,0,0,16"/>
+                            Style="{StaticResource MaterialDesignSubtitle2TextBlock}"
+                            Margin="0,0,0,8"/>
 
-                        <!-- Защита по давлению масла -->
-                        <Grid Margin="0,4">
+                        <Grid>
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="*"/>
-                                <ColumnDefinition Width="Auto"/>
-                            </Grid.ColumnDefinitions>
-
-                            <TextBlock 
-                                Grid.Column="0" 
-                                Text="Защита по давлению масла:"
-                                VerticalAlignment="Center"/>
-
-                            <Border 
-                                Grid.Column="1" 
-                                Background="{Binding OilPressureCriticalColor}" 
-                                Width="16" 
-                                Height="16" 
-                                CornerRadius="8"/>
-                        </Grid>
-
-                        <!-- Защита по оборотам двигателя -->
-                        <Grid Margin="0,4">
-                            <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="*"/>
-                                <ColumnDefinition Width="Auto"/>
                             </Grid.ColumnDefinitions>
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto"/>
+                                <RowDefinition Height="Auto"/>
+                            </Grid.RowDefinitions>
 
-                            <TextBlock 
-                                Grid.Column="0" 
-                                Text="Защита по оборотам двигателя:"
-                                VerticalAlignment="Center"/>
+                            <!-- Oil Pressure Protection -->
+                            <materialDesign:Card
+                                Grid.Row="0"
+                                Grid.Column="0"
+                                Background="{DynamicResource MaterialDesignBackground}"
+                                UniformCornerRadius="2"
+                                Margin="0,0,2,2"
+                                Padding="4">
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*"/>
+                                        <ColumnDefinition Width="Auto"/>
+                                    </Grid.ColumnDefinitions>
 
-                            <Border 
-                                Grid.Column="1" 
-                                Background="{Binding EngineSpeedCriticalColor}" 
-                                Width="16" 
-                                Height="16" 
-                                CornerRadius="8"/>
-                        </Grid>
+                                    <TextBlock 
+                                        Grid.Column="0"
+                                        Text="Давление масла" 
+                                        Style="{StaticResource MaterialDesignBody2TextBlock}"
+                                        VerticalAlignment="Center"/>
 
-                        <!-- Ограничение по наддуву -->
-                        <Grid Margin="0,4">
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="*"/>
-                                <ColumnDefinition Width="Auto"/>
-                            </Grid.ColumnDefinitions>
+                                    <Ellipse 
+                                        Grid.Column="1"
+                                        Width="12" 
+                                        Height="12" 
+                                        Fill="{Binding OilPressureCriticalColor}"/>
+                                </Grid>
+                            </materialDesign:Card>
 
-                            <TextBlock 
-                                Grid.Column="0" 
-                                Text="Ограничение по наддуву:"
-                                VerticalAlignment="Center"/>
+                            <!-- Engine Speed Protection -->
+                            <materialDesign:Card
+                                Grid.Row="0"
+                                Grid.Column="1"
+                                Background="{DynamicResource MaterialDesignBackground}"
+                                UniformCornerRadius="2"
+                                Margin="2,0,0,2"
+                                Padding="4">
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*"/>
+                                        <ColumnDefinition Width="Auto"/>
+                                    </Grid.ColumnDefinitions>
 
-                            <Border 
-                                Grid.Column="1" 
-                                Background="{Binding BoostPressureCriticalColor}" 
-                                Width="16" 
-                                Height="16" 
-                                CornerRadius="8"/>
-                        </Grid>
+                                    <TextBlock 
+                                        Grid.Column="0"
+                                        Text="Обороты двигателя" 
+                                        Style="{StaticResource MaterialDesignBody2TextBlock}"
+                                        VerticalAlignment="Center"/>
 
-                        <!-- Защита по температуре масла -->
-                        <Grid Margin="0,4">
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="*"/>
-                                <ColumnDefinition Width="Auto"/>
-                            </Grid.ColumnDefinitions>
+                                    <Ellipse 
+                                        Grid.Column="1"
+                                        Width="12" 
+                                        Height="12" 
+                                        Fill="{Binding EngineSpeedCriticalColor}"/>
+                                </Grid>
+                            </materialDesign:Card>
 
-                            <TextBlock 
-                                Grid.Column="0" 
-                                Text="Защита по температуре масла:"
-                                VerticalAlignment="Center"/>
+                            <!-- Boost Pressure Protection -->
+                            <materialDesign:Card
+                                Grid.Row="1"
+                                Grid.Column="0"
+                                Background="{DynamicResource MaterialDesignBackground}"
+                                UniformCornerRadius="2"
+                                Margin="0,2,2,0"
+                                Padding="4">
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*"/>
+                                        <ColumnDefinition Width="Auto"/>
+                                    </Grid.ColumnDefinitions>
 
-                            <Border 
-                                Grid.Column="1" 
-                                Background="{Binding OilTemperatureCriticalColor}" 
-                                Width="16" 
-                                Height="16" 
-                                CornerRadius="8"/>
+                                    <TextBlock 
+                                        Grid.Column="0"
+                                        Text="Давление наддува" 
+                                        Style="{StaticResource MaterialDesignBody2TextBlock}"
+                                        VerticalAlignment="Center"/>
+
+                                    <Ellipse 
+                                        Grid.Column="1"
+                                        Width="12" 
+                                        Height="12" 
+                                        Fill="{Binding BoostPressureCriticalColor}"/>
+                                </Grid>
+                            </materialDesign:Card>
+
+                            <!-- Oil Temperature Protection -->
+                            <materialDesign:Card
+                                Grid.Row="1"
+                                Grid.Column="1"
+                                Background="{DynamicResource MaterialDesignBackground}"
+                                UniformCornerRadius="2"
+                                Margin="2,2,0,0"
+                                Padding="4">
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*"/>
+                                        <ColumnDefinition Width="Auto"/>
+                                    </Grid.ColumnDefinitions>
+
+                                    <TextBlock 
+                                        Grid.Column="0"
+                                        Text="Температура масла" 
+                                        Style="{StaticResource MaterialDesignBody2TextBlock}"
+                                        VerticalAlignment="Center"/>
+
+                                    <Ellipse 
+                                        Grid.Column="1"
+                                        Width="12" 
+                                        Height="12" 
+                                        Fill="{Binding OilTemperatureCriticalColor}"/>
+                                </Grid>
+                            </materialDesign:Card>
                         </Grid>
                     </StackPanel>
-                </Border>
+                </materialDesign:Card>
 
-                <!-- График -->
-                <Border 
-    Grid.Row="1"
-    BorderBrush="#CCCCCC" 
-    BorderThickness="1"
-    Background="#F5F5F5"
-    CornerRadius="4">
-                    <Grid Margin="16">
+                <!-- Graph -->
+                <materialDesign:Card 
+                    Grid.Row="1"
+                    Margin="0,6,0,0"
+                    Background="{DynamicResource MaterialDesignCardBackground}"
+                    Padding="8"
+                    UniformCornerRadius="4">
+                    <Grid>
                         <Grid.RowDefinitions>
                             <RowDefinition Height="Auto"/>
                             <RowDefinition Height="*"/>
                             <RowDefinition Height="Auto"/>
                         </Grid.RowDefinitions>
 
-                        <TextBlock 
-            Grid.Row="0"
-            Text="График параметров" 
-            FontSize="16" 
-            FontWeight="SemiBold"/>
+                        <DockPanel Grid.Row="0" LastChildFill="False">
+                            <TextBlock 
+                                DockPanel.Dock="Left"
+                                Text="График параметров" 
+                                Style="{StaticResource MaterialDesignSubtitle2TextBlock}"/>
 
-                        <!-- ScottPlot контрол -->
-                        <WpfPlot 
-            Grid.Row="1"
-            x:Name="ParametersPlot"
-            Margin="0,8"/>
+                            <WrapPanel DockPanel.Dock="Right">
+                                <CheckBox 
+                                    Content="Обороты" 
+                                    IsChecked="{Binding ShowEngineSpeed}"
+                                    Style="{StaticResource MaterialDesignCheckBox}"
+                                    Margin="0,0,6,0"/>
 
-                        <!-- Настройки графика -->
-                        <StackPanel Grid.Row="2" Orientation="Horizontal" HorizontalAlignment="Right">
-                            <Button Content="Очистить" Command="{Binding ClearGraphCommand}" Margin="0,0,8,0"/>
-                            <Button Content="Экспорт" Command="{Binding ExportGraphCommand}"/>
-                        </StackPanel>
+                                <CheckBox 
+                                    Content="Давление масла" 
+                                    IsChecked="{Binding ShowOilPressure}"
+                                    Style="{StaticResource MaterialDesignCheckBox}"
+                                    Margin="0,0,6,0"/>
+
+                                <CheckBox 
+                                    Content="Температура масла" 
+                                    IsChecked="{Binding ShowOilTemperature}"
+                                    Style="{StaticResource MaterialDesignCheckBox}"/>
+                            </WrapPanel>
+                        </DockPanel>
+
+                        <Border 
+                            Grid.Row="1"
+                            BorderBrush="{DynamicResource MaterialDesignDivider}"
+                            BorderThickness="1"
+                            Margin="0,4"
+                            CornerRadius="2">
+                            <WpfPlot 
+                                x:Name="ParametersPlot"/>
+                        </Border>
+
+                        <DockPanel Grid.Row="2" LastChildFill="False">
+                            <ComboBox 
+                                DockPanel.Dock="Left"
+                                ItemsSource="{Binding TimeIntervals}"
+                                SelectedItem="{Binding SelectedTimeInterval, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                Style="{StaticResource MaterialDesignOutlinedComboBox}"
+                                materialDesign:HintAssist.Hint="Интервал"
+                                Width="100"
+                                Height="32">
+                                <ComboBox.ItemTemplate>
+                                    <DataTemplate>
+                                        <TextBlock Text="{Binding}" />
+                                    </DataTemplate>
+                                </ComboBox.ItemTemplate>
+                            </ComboBox>
+
+                            <StackPanel DockPanel.Dock="Right" Orientation="Horizontal">
+                                <Button 
+                                    Content="Очистить" 
+                                    Command="{Binding ClearGraphCommand}"
+                                    Style="{StaticResource MaterialDesignOutlinedButton}"
+                                    Margin="0,0,4,0"
+                                    Height="32"/>
+
+                                <Button 
+                                    Content="Экспорт" 
+                                    Command="{Binding ExportGraphCommand}"
+                                    Style="{StaticResource MaterialDesignOutlinedButton}"
+                                    Height="32"/>
+                            </StackPanel>
+                        </DockPanel>
                     </Grid>
-                </Border>
+                </materialDesign:Card>
             </Grid>
         </Grid>
     </Grid>

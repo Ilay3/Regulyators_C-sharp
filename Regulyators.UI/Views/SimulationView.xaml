@@ -5,92 +5,121 @@
     xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006" 
     xmlns:d="http://schemas.microsoft.com/expression/blend/2008" 
     xmlns:local="clr-namespace:Regulyators.UI.Views"
-    xmlns:viewmodels="clr-namespace:Regulyators.UI.ViewModels"
+    xmlns:materialDesign="http://materialdesigninxaml.net/winfx/xaml/themes"
     xmlns:converters="clr-namespace:Regulyators.UI.Converters"
     mc:Ignorable="d" 
-    d:DesignHeight="600" d:DesignWidth="800">
+    d:DesignHeight="850" d:DesignWidth="1360"
+    Background="{DynamicResource MaterialDesignPaper}">
 
     <UserControl.Resources>
         <converters:BooleanToBrushConverterExt x:Key="BooleanToBrushExt"/>
     </UserControl.Resources>
 
-    <Grid Margin="16">
+    <Grid Margin="12">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto"/>
             <RowDefinition Height="*"/>
             <RowDefinition Height="Auto"/>
         </Grid.RowDefinitions>
 
-        <!-- Заголовок -->
-        <TextBlock 
-            Grid.Row="0"
-            Text="Симуляция работы регуляторов" 
-            FontSize="18" 
-            FontWeight="Bold" 
-            Margin="0,0,0,16"/>
+        <!-- Header -->
+        <StackPanel Grid.Row="0" Margin="0,0,0,8">
+            <TextBlock 
+                Text="СИМУЛЯЦИЯ РАБОТЫ РЕГУЛЯТОРОВ" 
+                Style="{StaticResource MaterialDesignHeadline6TextBlock}"
+                Foreground="{DynamicResource PrimaryHueMidBrush}"
+                Margin="0,0,0,2"/>
+            <TextBlock 
+                Text="Управление симуляцией для отладки и тестирования без подключения к оборудованию"
+                Style="{StaticResource MaterialDesignBody2TextBlock}"
+                Opacity="0.6"/>
+        </StackPanel>
 
-        <!-- Основное содержимое -->
+        <!-- Main Content -->
         <Grid Grid.Row="1">
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="*" />
                 <ColumnDefinition Width="*" />
             </Grid.ColumnDefinitions>
 
-            <!-- Левая панель - управление симуляцией -->
-            <Border 
+            <!-- Left Panel - Simulation Controls -->
+            <materialDesign:Card 
                 Grid.Column="0" 
-                BorderBrush="#CCCCCC" 
-                BorderThickness="1" 
-                Margin="0,0,8,0"
-                Padding="16"
-                Background="#F5F5F5"
-                CornerRadius="4">
-                <StackPanel>
+                Margin="0,0,6,0"
+                Background="{DynamicResource MaterialDesignCardBackground}"
+                Padding="8"
+                UniformCornerRadius="4">
+                <Grid>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="*"/>
+                    </Grid.RowDefinitions>
+
+                    <!-- Simulation Header -->
                     <TextBlock 
+                        Grid.Row="0"
                         Text="Управление симуляцией" 
-                        FontSize="16" 
-                        FontWeight="SemiBold" 
-                        Margin="0,0,0,16"/>
+                        Style="{StaticResource MaterialDesignSubtitle2TextBlock}"
+                        Margin="0,0,0,8"/>
 
-                    <!-- Кнопка запуска/остановки симуляции -->
-                    <Button 
-                        Content="{Binding SimulationButtonText}" 
-                        Command="{Binding ToggleSimulationCommand}"
-                        Padding="16,8"
-                        Margin="0,8"
-                        FontWeight="Bold"
-                        Background="{Binding IsSimulationRunning, Converter={StaticResource BooleanToBrushExt}, ConverterParameter='Red;Green'}"
-                        Foreground="White"/>
+                    <!-- Main Simulation Button -->
+                    <StackPanel Grid.Row="1">
+                        <!-- Status Indicator -->
+                        <Border 
+                            Background="{Binding IsSimulationRunning, Converter={StaticResource BooleanToBrushExt}, ConverterParameter='Green;Gray'}"
+                            CornerRadius="2"
+                            Padding="8"
+                            Margin="0,0,0,8">
+                            <TextBlock 
+                                Text="{Binding SimulationStatusText}" 
+                                Style="{StaticResource MaterialDesignBody2TextBlock}"
+                                Foreground="White"
+                                HorizontalAlignment="Center"/>
+                        </Border>
 
-                    <!-- Индикатор статуса симуляции -->
-                    <Border 
-                        Background="{Binding IsSimulationRunning, Converter={StaticResource BooleanToBrushExt}, ConverterParameter='Green;Gray'}"
-                        Padding="8"
-                        Margin="0,8"
-                        CornerRadius="4">
-                        <TextBlock 
-                            Text="{Binding SimulationStatusText}" 
+                        <!-- Toggle Simulation Button -->
+                        <Button 
+                            Content="{Binding SimulationButtonText}" 
+                            Command="{Binding ToggleSimulationCommand}"
+                            Style="{StaticResource MaterialDesignRaisedButton}"
+                            materialDesign:ButtonAssist.CornerRadius="2"
+                            Height="48"
                             FontWeight="Bold"
-                            HorizontalAlignment="Center"
-                            Foreground="White"/>
-                    </Border>
+                            Foreground="White"
+                            Background="{Binding IsSimulationRunning, Converter={StaticResource BooleanToBrushExt}, ConverterParameter='Red;Green'}"
+                            Margin="0,0,0,16"/>
+                    </StackPanel>
 
-                    <!-- Дополнительные настройки симуляции -->
-                    <GroupBox Header="Настройки симуляции" Margin="0,16,0,0">
-                        <StackPanel Margin="8">
-                            <!-- Режим случайных сбоев -->
+                    <!-- Simulation Settings -->
+                    <materialDesign:Card
+                        Grid.Row="2"
+                        Background="{DynamicResource MaterialDesignBackground}"
+                        UniformCornerRadius="2"
+                        Margin="0,0,0,0"
+                        Padding="8">
+                        <StackPanel>
+                            <TextBlock 
+                                Text="Настройки симуляции" 
+                                Style="{StaticResource MaterialDesignBody1TextBlock}"
+                                FontWeight="Medium"
+                                Margin="0,0,0,8"/>
+
+                            <!-- Random Failures -->
                             <CheckBox 
                                 Content="Случайные сбои оборудования" 
                                 IsChecked="{Binding IsRandomFailures}"
+                                Style="{StaticResource MaterialDesignCheckBox}"
                                 Margin="0,4"/>
 
-                            <!-- Режим стресс-теста -->
+                            <!-- Stress Test -->
                             <CheckBox 
                                 Content="Стресс-тест (агрессивные изменения параметров)" 
                                 IsChecked="{Binding IsStressTest}"
+                                Style="{StaticResource MaterialDesignCheckBox}"
                                 Margin="0,4"/>
 
-                            <!-- Выбор сценария симуляции -->
+                            <!-- Scenario Selector -->
                             <Grid Margin="0,8">
                                 <Grid.ColumnDefinitions>
                                     <ColumnDefinition Width="Auto"/>
@@ -100,11 +129,13 @@
                                 <TextBlock 
                                     Grid.Column="0" 
                                     Text="Сценарий:" 
+                                    Style="{StaticResource MaterialDesignBody1TextBlock}"
                                     VerticalAlignment="Center"
                                     Margin="0,0,8,0"/>
 
                                 <ComboBox 
                                     Grid.Column="1" 
+                                    Style="{StaticResource MaterialDesignOutlinedComboBox}"
                                     SelectedItem="{Binding SelectedScenario}">
                                     <ComboBoxItem Content="Стандартный"/>
                                     <ComboBoxItem Content="Нарастающая нагрузка"/>
@@ -113,112 +144,185 @@
                                 </ComboBox>
                             </Grid>
 
-                            <!-- Кнопка сброса симуляции -->
+                            <!-- Reset Button -->
                             <Button 
                                 Content="Сбросить симуляцию" 
                                 Command="{Binding ResetSimulationCommand}"
-                                Margin="0,8,0,0"/>
+                                Style="{StaticResource MaterialDesignOutlinedButton}"
+                                Margin="0,16,0,0"/>
+
+                            <!-- Info Text -->
+                            <TextBlock 
+                                Text="Режим симуляции предназначен для демонстрации и тестирования системы без подключения к реальному оборудованию."
+                                Style="{StaticResource MaterialDesignBody2TextBlock}"
+                                TextWrapping="Wrap"
+                                Margin="0,16,0,0"
+                                Foreground="#555555"/>
                         </StackPanel>
-                    </GroupBox>
+                    </materialDesign:Card>
+                </Grid>
+            </materialDesign:Card>
 
-                    <!-- Информация о режиме симуляции -->
-                    <TextBlock 
-                        Text="Режим симуляции предназначен для демонстрации и тестирования системы без подключения к реальному оборудованию."
-                        TextWrapping="Wrap"
-                        Margin="0,16,0,0"
-                        Foreground="#555555"/>
-                </StackPanel>
-            </Border>
-
-            <!-- Правая панель - имитация аварийных ситуаций -->
-            <Border 
+            <!-- Right Panel - Fault Simulation -->
+            <materialDesign:Card 
                 Grid.Column="1" 
-                BorderBrush="#CCCCCC" 
-                BorderThickness="1" 
-                Margin="8,0,0,0"
-                Padding="16"
-                Background="#F5F5F5"
-                CornerRadius="4">
-                <StackPanel>
+                Margin="6,0,0,0"
+                Background="{DynamicResource MaterialDesignCardBackground}"
+                Padding="8"
+                UniformCornerRadius="4">
+                <Grid>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="*"/>
+                    </Grid.RowDefinitions>
+
+                    <!-- Fault Simulation Header -->
                     <TextBlock 
+                        Grid.Row="0"
                         Text="Имитация аварийных ситуаций" 
-                        FontSize="16" 
-                        FontWeight="SemiBold" 
-                        Margin="0,0,0,16"/>
+                        Style="{StaticResource MaterialDesignSubtitle2TextBlock}"
+                        Margin="0,0,0,8"/>
 
-                    <!-- Имитация падения давления масла -->
-                    <Button 
-                        Content="Имитировать падение давления масла" 
-                        Command="{Binding SimulateFaultCommand}"
-                        CommandParameter="OilPressure"
-                        Padding="16,8"
-                        Margin="0,8"
-                        Background="#FF9800"
-                        Foreground="White"/>
+                    <!-- Fault Buttons -->
+                    <StackPanel Grid.Row="1">
+                        <!-- Oil Pressure Drop -->
+                        <Button 
+                            Content="Имитировать падение давления масла" 
+                            Command="{Binding SimulateFaultCommand}"
+                            CommandParameter="OilPressure"
+                            Style="{StaticResource MaterialDesignRaisedButton}"
+                            materialDesign:ButtonAssist.CornerRadius="2"
+                            Margin="0,4"
+                            Background="#FF9800"
+                            Foreground="White"/>
 
-                    <!-- Имитация превышения оборотов -->
-                    <Button 
-                        Content="Имитировать превышение оборотов двигателя" 
-                        Command="{Binding SimulateFaultCommand}"
-                        CommandParameter="EngineSpeed"
-                        Padding="16,8"
-                        Margin="0,8"
-                        Background="#FF9800"
-                        Foreground="White"/>
+                        <!-- Engine Overspeed -->
+                        <Button 
+                            Content="Имитировать превышение оборотов двигателя" 
+                            Command="{Binding SimulateFaultCommand}"
+                            CommandParameter="EngineSpeed"
+                            Style="{StaticResource MaterialDesignRaisedButton}"
+                            materialDesign:ButtonAssist.CornerRadius="2"
+                            Margin="0,4"
+                            Background="#FF9800"
+                            Foreground="White"/>
 
-                    <!-- Имитация превышения давления наддува -->
-                    <Button 
-                        Content="Имитировать превышение давления наддува" 
-                        Command="{Binding SimulateFaultCommand}"
-                        CommandParameter="BoostPressure"
-                        Padding="16,8"
-                        Margin="0,8"
-                        Background="#FF9800"
-                        Foreground="White"/>
+                        <!-- Boost Pressure Overload -->
+                        <Button 
+                            Content="Имитировать превышение давления наддува" 
+                            Command="{Binding SimulateFaultCommand}"
+                            CommandParameter="BoostPressure"
+                            Style="{StaticResource MaterialDesignRaisedButton}"
+                            materialDesign:ButtonAssist.CornerRadius="2"
+                            Margin="0,4"
+                            Background="#FF9800"
+                            Foreground="White"/>
 
-                    <!-- Имитация перегрева масла -->
-                    <Button 
-                        Content="Имитировать перегрев масла" 
-                        Command="{Binding SimulateFaultCommand}"
-                        CommandParameter="OilTemperature"
-                        Padding="16,8"
-                        Margin="0,8"
-                        Background="#FF9800"
-                        Foreground="White"/>
+                        <!-- Oil Overheating -->
+                        <Button 
+                            Content="Имитировать перегрев масла" 
+                            Command="{Binding SimulateFaultCommand}"
+                            CommandParameter="OilTemperature"
+                            Style="{StaticResource MaterialDesignRaisedButton}"
+                            materialDesign:ButtonAssist.CornerRadius="2"
+                            Margin="0,4"
+                            Background="#FF9800"
+                            Foreground="White"/>
 
-                    <!-- Имитация потери связи -->
-                    <Button 
-                        Content="Имитировать потерю связи" 
-                        Command="{Binding SimulateFaultCommand}"
-                        CommandParameter="ConnectionLoss"
-                        Padding="16,8"
-                        Margin="0,8"
-                        Background="#F44336"
-                        Foreground="White"/>
+                        <!-- Connection Loss -->
+                        <Button 
+                            Content="Имитировать потерю связи" 
+                            Command="{Binding SimulateFaultCommand}"
+                            CommandParameter="ConnectionLoss"
+                            Style="{StaticResource MaterialDesignRaisedButton}"
+                            materialDesign:ButtonAssist.CornerRadius="2"
+                            Margin="0,4"
+                            Background="#F44336"
+                            Foreground="White"/>
+                    </StackPanel>
 
-                    <!-- Описание возможностей -->
-                    <GroupBox Header="Возможности симуляции" Margin="0,16,0,0">
-                        <StackPanel Margin="8">
-                            <TextBlock Text="• Реалистичная физическая модель двигателя" Margin="0,2"/>
-                            <TextBlock Text="• Имитация инерции и нагрева" Margin="0,2"/>
-                            <TextBlock Text="• Автоматическая проверка защит" Margin="0,2"/>
-                            <TextBlock Text="• Реакция на команды управления" Margin="0,2"/>
-                            <TextBlock Text="• Возможность тестирования всех модулей системы" Margin="0,2"/>
-                        </StackPanel>
-                    </GroupBox>
-                </StackPanel>
-            </Border>
+                    <!-- Features -->
+                    <materialDesign:Card
+                        Grid.Row="2"
+                        Background="{DynamicResource MaterialDesignBackground}"
+                        UniformCornerRadius="2"
+                        Margin="0,16,0,0"
+                        Padding="8">
+                        <Grid>
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto"/>
+                                <RowDefinition Height="*"/>
+                            </Grid.RowDefinitions>
+
+                            <TextBlock 
+                                Grid.Row="0"
+                                Text="Возможности симуляции" 
+                                Style="{StaticResource MaterialDesignBody1TextBlock}"
+                                FontWeight="Medium"
+                                Margin="0,0,0,8"/>
+
+                            <StackPanel Grid.Row="1">
+                                <TextBlock 
+                                    Style="{StaticResource MaterialDesignBody2TextBlock}" 
+                                    Margin="0,2"
+                                    Text="• Реалистичная физическая модель двигателя"/>
+                                <TextBlock 
+                                    Style="{StaticResource MaterialDesignBody2TextBlock}" 
+                                    Margin="0,2"
+                                    Text="• Имитация инерции и нагрева"/>
+                                <TextBlock 
+                                    Style="{StaticResource MaterialDesignBody2TextBlock}" 
+                                    Margin="0,2"
+                                    Text="• Автоматическая проверка защит"/>
+                                <TextBlock 
+                                    Style="{StaticResource MaterialDesignBody2TextBlock}" 
+                                    Margin="0,2"
+                                    Text="• Реакция на команды управления"/>
+                                <TextBlock 
+                                    Style="{StaticResource MaterialDesignBody2TextBlock}" 
+                                    Margin="0,2"
+                                    Text="• Возможность тестирования всех модулей системы"/>
+
+                                <!-- Sample Data Visualization (Icon Only) -->
+                                <materialDesign:Card
+                                    Background="#F0F0F0"
+                                    UniformCornerRadius="2"
+                                    Margin="0,16,0,0"
+                                    Padding="8">
+                                    <DockPanel LastChildFill="False">
+                                        <materialDesign:PackIcon 
+                                            Kind="ChartLineVariant" 
+                                            Width="24" 
+                                            Height="24"
+                                            DockPanel.Dock="Left" 
+                                            VerticalAlignment="Center"
+                                            Margin="0,0,8,0"/>
+
+                                        <TextBlock 
+                                            Text="Генерация и визуализация тестовых данных"
+                                            Style="{StaticResource MaterialDesignBody2TextBlock}"
+                                            DockPanel.Dock="Left"
+                                            VerticalAlignment="Center"/>
+                                    </DockPanel>
+                                </materialDesign:Card>
+                            </StackPanel>
+                        </Grid>
+                    </materialDesign:Card>
+                </Grid>
+            </materialDesign:Card>
         </Grid>
 
-        <!-- Статусная строка -->
-        <Border 
+        <!-- Status Bar -->
+        <materialDesign:Card 
             Grid.Row="2"
             Background="#E0E0E0" 
-            Padding="8"
-            Margin="0,16,0,0">
+            UniformCornerRadius="4"
+            Margin="0,8,0,0">
             <TextBlock 
                 Text="{Binding StatusMessage}"
-                VerticalAlignment="Center"/>
-        </Border>
+                Style="{StaticResource MaterialDesignBody2TextBlock}"
+                Margin="8,4"/>
+        </materialDesign:Card>
     </Grid>
 </UserControl>

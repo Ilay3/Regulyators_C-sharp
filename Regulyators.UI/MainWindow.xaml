@@ -38,7 +38,7 @@
             </Grid.RowDefinitions>
 
             <!-- App Bar -->
-            <materialDesign:ColorZone Grid.Row="0" Mode="PrimaryMid" Padding="16" materialDesign:ShadowAssist.ShadowDepth="Depth2">
+            <materialDesign:ColorZone Grid.Row="0" Mode="PrimaryMid" Padding="16">
                 <DockPanel>
                     <StackPanel Orientation="Horizontal" DockPanel.Dock="Left">
                         <materialDesign:PackIcon Kind="Engine" Width="24" Height="24" VerticalAlignment="Center" Margin="0,0,8,0"/>
@@ -73,27 +73,33 @@
                 </Grid.ColumnDefinitions>
 
                 <!-- Боковое меню -->
-                <materialDesign:Card Grid.Column="0" Margin="16" MinWidth="220" Padding="8" materialDesign:ShadowAssist.ShadowDepth="Depth1">
+                <materialDesign:Card Grid.Column="0" Margin="12" UniformCornerRadius="4" Padding="4" Width="240">
                     <ListView 
                         ItemsSource="{Binding MenuItems}" 
                         SelectedItem="{Binding SelectedMenuItem}"
                         BorderThickness="0">
                         <ListView.ItemTemplate>
                             <DataTemplate>
-                                <StackPanel Orientation="Horizontal">
-                                    <materialDesign:PackIcon Kind="ViewDashboard" Width="24" Height="24" VerticalAlignment="Center" Margin="0,0,16,0"/>
+                                <StackPanel Orientation="Horizontal" Margin="8">
+                                    <materialDesign:PackIcon Kind="{Binding IconKind}" Width="24" Height="24" VerticalAlignment="Center" Margin="0,0,16,0"/>
                                     <TextBlock Text="{Binding Title}" VerticalAlignment="Center" />
                                 </StackPanel>
                             </DataTemplate>
                         </ListView.ItemTemplate>
+                        <ListView.ItemContainerStyle>
+                            <Style TargetType="ListViewItem" BasedOn="{StaticResource MaterialDesignListBoxItem}">
+                                <Setter Property="Padding" Value="8"/>
+                                <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
+                            </Style>
+                        </ListView.ItemContainerStyle>
                     </ListView>
                 </materialDesign:Card>
 
                 <!-- Область контента -->
-                <materialDesign:Card Grid.Column="1" Margin="0,16,16,16" materialDesign:ShadowAssist.ShadowDepth="Depth1">
+                <materialDesign:Card Grid.Column="1" Margin="0,12,12,12" UniformCornerRadius="4">
                     <ContentControl 
                         Content="{Binding CurrentView}" 
-                        Margin="8" />
+                        Margin="0" />
                 </materialDesign:Card>
             </Grid>
 
@@ -125,7 +131,7 @@
                     HorizontalAlignment="Center" 
                     VerticalAlignment="Center"
                     Padding="16"
-                    materialDesign:ShadowAssist.ShadowDepth="Depth3">
+                    UniformCornerRadius="4">
                     <StackPanel 
                         HorizontalAlignment="Center" 
                         VerticalAlignment="Center">
